@@ -47,9 +47,12 @@ export default async function BuyersPage({
         title="Cash Buyers"
         subtitle="Dispositions CRM — your buyers list and their buy boxes."
         action={
-          <LinkButton href="/buyers/new" variant="primary">
-            + New Buyer
-          </LinkButton>
+          <div className="flex gap-2">
+            <LinkButton href="/buyers/discover">🔎 Discover via Apollo</LinkButton>
+            <LinkButton href="/buyers/new" variant="primary">
+              + New Buyer
+            </LinkButton>
+          </div>
         }
       />
 

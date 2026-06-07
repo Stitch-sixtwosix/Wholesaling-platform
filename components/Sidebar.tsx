@@ -4,13 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 
-const NAV: { group: string; items: { href: string; label: string; icon: string }[] }[] = [
+type NavItem = { href: string; label: string; icon: string; roles?: string[] };
+const NAV: { group: string; roles?: string[]; items: NavItem[] }[] = [
   {
     group: "Overview",
     items: [{ href: "/", label: "Dashboard", icon: "📊" }],
   },
   {
     group: "Acquisitions",
+    roles: ["admin", "manager", "acquisitions"],
     items: [
       { href: "/leads", label: "Seller Leads", icon: "🎯" },
       { href: "/pipeline", label: "Deal Pipeline", icon: "🗂️" },
@@ -20,23 +22,37 @@ const NAV: { group: string; items: { href: string; label: string; icon: string }
   },
   {
     group: "Dispositions",
+    roles: ["admin", "manager", "dispositions"],
     items: [
       { href: "/buyers", label: "Cash Buyers", icon: "💰" },
       { href: "/dispositions", label: "Deal Matching", icon: "🔁" },
+      { href: "/marketing", label: "Marketing", icon: "📣" },
     ],
   },
   {
     group: "Operations",
     items: [
-      { href: "/marketing", label: "Marketing", icon: "📣" },
       { href: "/contracts", label: "Contracts", icon: "📄" },
       { href: "/tasks", label: "Tasks", icon: "✅" },
     ],
   },
+  {
+    group: "Admin",
+    roles: ["admin"],
+    items: [{ href: "/team", label: "Team & Access", icon: "👥" }],
+  },
 ];
 
-export function Sidebar() {
+function visibleFor(role: string) {
+  return NAV.filter((section) => !section.roles || section.roles.includes(role)).map((section) => ({
+    ...section,
+    items: section.items.filter((item) => !item.roles || item.roles.includes(role)),
+  }));
+}
+
+export function Sidebar({ role }: { role: string }) {
   const pathname = usePathname();
+  const nav = visibleFor(role);
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
@@ -49,7 +65,7 @@ export function Sidebar() {
         </span>
       </div>
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
-        {NAV.map((section) => (
+        {nav.map((section) => (
           <div key={section.group}>
             <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
               {section.group}

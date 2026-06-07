@@ -33,6 +33,19 @@ activity feed.
   property types, price range, min beds, max rehab, proof of funds).
 - **Deal Matching** — pick a deal and see buyers **ranked by buy-box fit score**,
   assign with one click, and **blast** the deal to top-matching buyers.
+- **Apollo.io integration** — **Discover Buyers** searches Apollo for investor
+  prospects by market/keyword and imports them as buyers; **Enrich** reveals a
+  buyer's verified email & phone (1 Apollo credit per match). Set `APOLLO_API_KEY`
+  to enable. (Apollo targets businesses/professionals — not homeowner skip tracing.)
+
+### 🔐 Authentication & roles
+- Cookie-session login (HMAC-signed, scrypt-hashed passwords — no external deps).
+- Three account types: **Master Admin** (everything + Team management),
+  **Acquisition Manager** (leads, pipeline, properties, analyzer), and
+  **Disposition Manager** (buyers, matching, marketing). Both managers share the
+  dashboard, contracts, and tasks.
+- Route protection via middleware; admins manage logins on the **Team & Access**
+  page. Demo logins are shown on the sign-in screen.
 
 ### 📣 Operations
 - **Marketing** — multi-channel campaigns (SMS, email, direct mail, cold call,
@@ -115,10 +128,20 @@ prisma/
 - Domain vocabulary (statuses, stages, channels) and their display colors live
   in `lib/constants.ts` so labels/badges stay consistent everywhere.
 
+## Demo logins
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Master Admin | jordan@wholesaleos.com | admin123 |
+| Acquisitions Manager | maya@wholesaleos.com | acq123 |
+| Dispositions Manager | devon@wholesaleos.com | dispo123 |
+
+> Change these and set a strong `SESSION_SECRET` before any real deployment.
+
 ## Roadmap / extension points
 
-- Authentication & multi-tenant teams (User model is already in place)
-- Real skip-tracing & lead enrichment (an **Apollo.io** integration point exists)
+- Multi-tenant teams / organizations
+- Homeowner skip-tracing via a property-data provider (BatchData, PropStream)
 - Live SMS/email sending (Twilio / SendGrid) wired into campaigns
 - E-signature integration for contracts (DocuSign / HelloSign)
 - Document storage for property photos and signed docs

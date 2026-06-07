@@ -7,6 +7,8 @@ import { BUYER_TYPES, BUYER_STATUSES, PROPERTY_TYPES, ACTIVITY_TYPES, labelOf } 
 import { currency, dateTime, fullName, relativeTime } from "@/lib/format";
 import { addBuyerActivity, updateBuyer, deleteBuyer } from "../actions";
 import { StatusControl } from "./StatusControl";
+import { EnrichButton } from "./EnrichButton";
+import { apolloConfigured } from "@/lib/apollo";
 
 export const dynamic = "force-dynamic";
 
@@ -198,6 +200,12 @@ export default async function BuyerDetailPage({ params }: { params: { id: string
 
         {/* Right column */}
         <div className="space-y-6">
+          {apolloConfigured() && (!buyer.email || !buyer.phone) && (
+            <Section title="Apollo Enrichment">
+              <EnrichButton buyerId={buyer.id} />
+            </Section>
+          )}
+
           <Section title="Quick Add Activity">
             <div className="p-5">
               <form action={addBuyerActivity} className="space-y-3">

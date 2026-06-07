@@ -7,7 +7,12 @@ import { PipelineFunnel, RevenueChart } from "@/components/Charts";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: { denied?: string };
+}) {
+  const denied = searchParams?.denied;
   const [
     leadCount,
     activeLeadCount,
@@ -61,6 +66,12 @@ export default async function DashboardPage() {
         title="Dashboard"
         subtitle="Your virtual wholesaling business at a glance."
       />
+
+      {denied && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          You don’t have access to that section with your current role.
+        </div>
+      )}
 
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

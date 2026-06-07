@@ -15,11 +15,13 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  role      String   @default("acquisitions") // admin | acquisitions | dispositions | manager
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  role         String   @default("acquisitions") // admin | acquisitions | dispositions | manager
+  passwordHash String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
 
   leads     Lead[]
   deals     Deal[]

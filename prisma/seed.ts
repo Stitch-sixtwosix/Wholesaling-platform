@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "../lib/password";
 
 const prisma = new PrismaClient();
 
@@ -30,15 +31,30 @@ async function main() {
   await prisma.buyer.deleteMany();
   await prisma.user.deleteMany();
 
-  // Users
+  // Users — with login credentials (demo passwords)
   const admin = await prisma.user.create({
-    data: { name: "Jordan Pierce", email: "jordan@wholesaleos.com", role: "admin" },
+    data: {
+      name: "Jordan Pierce",
+      email: "jordan@wholesaleos.com",
+      role: "admin",
+      passwordHash: hashPassword("admin123"),
+    },
   });
   const acq = await prisma.user.create({
-    data: { name: "Maya Chen", email: "maya@wholesaleos.com", role: "acquisitions" },
+    data: {
+      name: "Maya Chen",
+      email: "maya@wholesaleos.com",
+      role: "acquisitions",
+      passwordHash: hashPassword("acq123"),
+    },
   });
   const dispo = await prisma.user.create({
-    data: { name: "Devon Brooks", email: "devon@wholesaleos.com", role: "dispositions" },
+    data: {
+      name: "Devon Brooks",
+      email: "devon@wholesaleos.com",
+      role: "dispositions",
+      passwordHash: hashPassword("dispo123"),
+    },
   });
 
   // Properties
