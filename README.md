@@ -100,7 +100,7 @@ URL with working logins, deploy to **Vercel** with a free **Neon** Postgres data
 The repo is already wired for this — production uses a generated Postgres schema
 (`scripts/prod-schema.mjs`) so the source of truth stays in `prisma/schema.prisma`.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FStitch-sixtwosix%2Fwholesaling-platform&env=SESSION_SECRET&envDescription=A%20long%20random%20string%20used%20to%20sign%20login%20sessions)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FStitch-sixtwosix%2FWholesaling-platform&env=SESSION_SECRET&envDescription=A%20long%20random%20string%20used%20to%20sign%20login%20sessions)
 
 Steps:
 
