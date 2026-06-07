@@ -31,3 +31,6 @@ next-env.d.ts
 /prisma/*.db
 /prisma/*.db-journal
 /prisma/dev.db*
+
+# Generated production Prisma schema (Postgres)
+prisma/schema.prod.prisma

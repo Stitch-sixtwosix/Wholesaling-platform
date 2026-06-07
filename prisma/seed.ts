@@ -17,6 +17,14 @@ function daysFromNow(n: number): Date {
 async function main() {
   console.log("Seeding database…");
 
+  // Skip if already seeded (so it's safe to run on every deploy).
+  // Use `npm run db:reset` locally or SEED_FORCE=true to wipe & reseed.
+  const userCount = await prisma.user.count();
+  if (userCount > 0 && process.env.SEED_FORCE !== "true") {
+    console.log("Database already has data — skipping seed.");
+    return;
+  }
+
   // Wipe (order matters for FK)
   await prisma.activity.deleteMany();
   await prisma.task.deleteMany();

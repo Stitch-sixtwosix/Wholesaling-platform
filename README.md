@@ -93,6 +93,27 @@ The seed creates a realistic demo workspace: 3 users, 8 properties, 9 seller
 leads, 6 cash buyers, 8 deals across the pipeline, 5 marketing campaigns, 3
 contracts, and 7 tasks.
 
+## Deploy a public login URL (Vercel)
+
+Local/Codespaces run on SQLite with zero setup. For a permanent, browser-accessible
+URL with working logins, deploy to **Vercel** with a free **Neon** Postgres database.
+The repo is already wired for this — production uses a generated Postgres schema
+(`scripts/prod-schema.mjs`) so the source of truth stays in `prisma/schema.prisma`.
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FStitch-sixtwosix%2Fwholesaling-platform&env=SESSION_SECRET&envDescription=A%20long%20random%20string%20used%20to%20sign%20login%20sessions)
+
+Steps:
+
+1. Click **Deploy** (or go to vercel.com/new and import this repo).
+2. In **Storage**, add a **Neon Postgres** database — Vercel auto-sets `DATABASE_URL`.
+3. Set **`SESSION_SECRET`** to any long random string.
+4. Deploy. The build (`vercel-build`) generates the Postgres schema, pushes it,
+   seeds the demo logins, and builds the app.
+5. Open the Vercel URL and sign in with the demo accounts below.
+
+> The build seeds demo data only on the first deploy (it skips if the DB already
+> has data). Change the demo passwords before sharing the URL widely.
+
 ## Project structure
 
 ```
