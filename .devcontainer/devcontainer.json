@@ -2,10 +2,11 @@
   "name": "WholesaleOS",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
   "postCreateCommand": "npm install && cp -n .env.example .env || true && npm run setup",
+  "postStartCommand": "nohup npm run dev > /tmp/dev.log 2>&1 &",
   "forwardPorts": [3000],
   "portsAttributes": {
     "3000": {
-      "label": "WholesaleOS",
+      "label": "WholesaleOS — open this",
       "onAutoForward": "openPreview"
     }
   },
