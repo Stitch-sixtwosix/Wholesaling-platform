@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "vercel-build": "node scripts/prod-schema.mjs && prisma generate --schema prisma/schema.prod.prisma && prisma db push --schema prisma/schema.prod.prisma --skip-generate --accept-data-loss && tsx prisma/seed.ts && next build",
+    "vercel-build": "prisma generate && DATABASE_URL=\"file:./prod-seed.db\" prisma db push --skip-generate --accept-data-loss && DATABASE_URL=\"file:./prod-seed.db\" SEED_FORCE=true tsx prisma/seed.ts && next build",
     "start": "next start",
     "lint": "next lint",
     "db:push": "prisma db push",

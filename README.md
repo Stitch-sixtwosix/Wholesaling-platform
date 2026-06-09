@@ -93,26 +93,28 @@ The seed creates a realistic demo workspace: 3 users, 8 properties, 9 seller
 leads, 6 cash buyers, 8 deals across the pipeline, 5 marketing campaigns, 3
 contracts, and 7 tasks.
 
-## Deploy a public login URL (Vercel)
+## Deploy a public login URL (Vercel) — zero setup
 
-Local/Codespaces run on SQLite with zero setup. For a permanent, browser-accessible
-URL with working logins, deploy to **Vercel** with a free **Neon** Postgres database.
-The repo is already wired for this — production uses a generated Postgres schema
-(`scripts/prod-schema.mjs`) so the source of truth stays in `prisma/schema.prisma`.
+The app deploys to **Vercel with no database setup at all** — no Neon, no
+Storage step, no environment variables required. The build bakes a pre-seeded
+SQLite snapshot into the deployment and the app copies it to the serverless
+writable directory (`/tmp`) at runtime.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FStitch-sixtwosix%2FWholesaling-platform&env=SESSION_SECRET&envDescription=A%20long%20random%20string%20used%20to%20sign%20login%20sessions)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FStitch-sixtwosix%2FWholesaling-platform)
 
 Steps:
 
 1. Click **Deploy** (or go to vercel.com/new and import this repo).
-2. In **Storage**, add a **Neon Postgres** database — Vercel auto-sets `DATABASE_URL`.
-3. Set **`SESSION_SECRET`** to any long random string.
-4. Deploy. The build (`vercel-build`) generates the Postgres schema, pushes it,
-   seeds the demo logins, and builds the app.
-5. Open the Vercel URL and sign in with the demo accounts below.
+2. Deploy. The build (`vercel-build`) creates a seeded SQLite database, bundles
+   it, and builds the app.
+3. Open the Vercel URL and sign in with the demo accounts below. That's it.
 
-> The build seeds demo data only on the first deploy (it skips if the DB already
-> has data). Change the demo passwords before sharing the URL widely.
+> **Demo persistence:** because the runtime database lives in `/tmp`, edits
+> persist while a serverless instance stays warm but reset to the seeded
+> snapshot over time. Perfect for a live demo / first deploy. For permanent
+> storage, set a `DATABASE_URL` pointing at a hosted Postgres/LibSQL database
+> and switch the datasource provider. Also set a strong `SESSION_SECRET` (an
+> insecure default is used otherwise) before sharing the URL widely.
 
 ## Project structure
 
