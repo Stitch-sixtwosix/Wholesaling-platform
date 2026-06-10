@@ -37,10 +37,27 @@ if (isPostgres) {
     url.replace("-pooler.", ".");
   run("node scripts/prod-schema.mjs");
   run("prisma generate --schema prisma/schema.prod.prisma");
-  run("prisma db push --schema prisma/schema.prod.prisma --skip-generate --accept-data-loss", {
-    DATABASE_URL: directUrl,
-  });
-  // Seeds demo data only on the first deploy (the seed skips if data exists).
+
+  // Sync the schema. A normal (non-destructive) push handles all routine and
+  // additive changes and PRESERVES existing data. If the push can't proceed
+  // because the database holds rows from an older, incompatible schema (e.g. a
+  // pre-multi-tenant table missing the required orgId column), fall back to a
+  // one-time reset. This only triggers when a plain push is impossible, so once
+  // the schema is current your real data is never wiped. Set ALLOW_DB_RESET=false
+  // to disable the fallback entirely (push will then fail loudly instead).
+  const pushBase =
+    "prisma db push --schema prisma/schema.prod.prisma --skip-generate --accept-data-loss";
+  try {
+    run(pushBase, { DATABASE_URL: directUrl });
+  } catch (err) {
+    if (process.env.ALLOW_DB_RESET === "false") throw err;
+    console.warn(
+      "vercel-build: schema push blocked by incompatible existing data — resetting the database once to apply the current schema."
+    );
+    run(`${pushBase} --force-reset`, { DATABASE_URL: directUrl });
+  }
+
+  // Seeds demo data only when the database is empty (the seed skips if data exists).
   run("tsx prisma/seed.ts", { DATABASE_URL: directUrl });
   run("next build");
 } else {
