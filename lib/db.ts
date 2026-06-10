@@ -19,6 +19,14 @@ if (process.env.VERCEL && !isPostgres) {
     if (existsSync(seedDb)) copyFileSync(seedDb, runtimeDb);
   }
   process.env.DATABASE_URL = `file:${runtimeDb}`;
+} else if (isPostgres) {
+  // Neon's pooled connection (host contains "-pooler") runs PgBouncer in
+  // transaction mode, which is incompatible with Prisma's prepared statements
+  // unless pgbouncer=true is set. Add it so runtime queries are reliable.
+  const url = process.env.DATABASE_URL as string;
+  if (url.includes("-pooler.") && !/[?&]pgbouncer=true/.test(url)) {
+    process.env.DATABASE_URL = url + (url.includes("?") ? "&" : "?") + "pgbouncer=true";
+  }
 }
 
 // Reuse the Prisma client across hot reloads in development.

@@ -19,11 +19,17 @@ function run(cmd, env) {
 
 if (isPostgres) {
   console.log("vercel-build: PostgreSQL DATABASE_URL detected — persistent mode.");
+  // Schema changes (db push) need a DIRECT connection, not the PgBouncer pool.
+  // Neon's Vercel integration exposes the unpooled URL; fall back to DATABASE_URL.
+  const directUrl =
+    process.env.DATABASE_URL_UNPOOLED || process.env.POSTGRES_URL_NON_POOLING || url;
   run("node scripts/prod-schema.mjs");
   run("prisma generate --schema prisma/schema.prod.prisma");
-  run("prisma db push --schema prisma/schema.prod.prisma --skip-generate --accept-data-loss");
+  run("prisma db push --schema prisma/schema.prod.prisma --skip-generate --accept-data-loss", {
+    DATABASE_URL: directUrl,
+  });
   // Seeds demo data only on the first deploy (the seed skips if data exists).
-  run("tsx prisma/seed.ts");
+  run("tsx prisma/seed.ts", { DATABASE_URL: directUrl });
   run("next build");
 } else {
   console.log("vercel-build: no Postgres DATABASE_URL — bundled SQLite demo mode.");
