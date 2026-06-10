@@ -2,16 +2,17 @@ import { PrismaClient } from "@prisma/client";
 import { existsSync, copyFileSync } from "node:fs";
 import path from "node:path";
 
-// On Vercel (and similar serverless platforms) the deployment filesystem is
+// On Vercel in DEMO mode (no persistent Postgres) the deployment filesystem is
 // read-only except for /tmp. We ship a pre-seeded SQLite snapshot in the build
 // (prisma/prod-seed.db) and copy it to /tmp on cold start, then point Prisma at
-// it. This lets the app run a working public deployment with ZERO external
-// database setup — no Neon/Postgres, no env vars required.
+// it. When a persistent Postgres DATABASE_URL is configured instead, we use that
+// directly and skip all of this.
 //
-// Note: /tmp is per-instance and ephemeral, so writes persist for the life of a
-// warm serverless instance but reset to the seeded snapshot over time. Great for
-// a live demo / first deploy; wire up a persistent DATABASE_URL later if needed.
-if (process.env.VERCEL) {
+// Note: /tmp is per-instance and ephemeral, so user-created data does NOT
+// persist across instances. Configure a Postgres DATABASE_URL (e.g. Neon) for
+// real, shared, permanent storage.
+const isPostgres = /^postgres(ql)?:\/\//.test(process.env.DATABASE_URL || "");
+if (process.env.VERCEL && !isPostgres) {
   const runtimeDb = "/tmp/data.db";
   if (!existsSync(runtimeDb)) {
     const seedDb = path.join(process.cwd(), "prisma", "prod-seed.db");
