@@ -1,6 +1,7 @@
 import Link from "next/link";
 import clsx from "clsx";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, Badge, StatCard, EmptyState, Section } from "@/components/ui";
 import { SubmitButton } from "@/components/Form";
 import { DEAL_STAGES, BUYER_TYPES, BUYER_STATUSES, labelOf } from "@/lib/constants";
@@ -29,24 +30,25 @@ export default async function DispositionsPage({
 }: {
   searchParams: { deal?: string };
 }) {
+  const { orgId } = await requireUser();
   const selectedId = searchParams.deal;
 
   // Dispo-ready deals; fall back to all active deals if none match.
   let deals = await prisma.deal.findMany({
-    where: { status: "active", stage: { in: DISPO_STAGES } },
+    where: { orgId, status: "active", stage: { in: DISPO_STAGES } },
     include: { property: true, buyer: true },
     orderBy: { updatedAt: "desc" },
   });
   if (deals.length === 0) {
     deals = await prisma.deal.findMany({
-      where: { status: "active" },
+      where: { orgId, status: "active" },
       include: { property: true, buyer: true },
       orderBy: { updatedAt: "desc" },
     });
   }
 
   const buyers = await prisma.buyer.findMany({
-    where: { status: { not: "inactive" } },
+    where: { orgId, status: { not: "inactive" } },
     orderBy: { updatedAt: "desc" },
   });
 

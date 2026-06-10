@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, DataTable, EmptyState, LinkButton } from "@/components/ui";
 import { PROPERTY_TYPES, labelOf } from "@/lib/constants";
 import { currency, number } from "@/lib/format";
@@ -11,18 +12,22 @@ export default async function PropertiesPage({
 }: {
   searchParams: { q?: string };
 }) {
+  const { orgId } = await requireUser();
   const { q } = searchParams;
 
   const properties = await prisma.property.findMany({
-    where: q
-      ? {
-          OR: [
-            { address: { contains: q } },
-            { city: { contains: q } },
-            { zip: { contains: q } },
-          ],
-        }
-      : {},
+    where: {
+      orgId,
+      ...(q
+        ? {
+            OR: [
+              { address: { contains: q } },
+              { city: { contains: q } },
+              { zip: { contains: q } },
+            ],
+          }
+        : {}),
+    },
     include: { _count: { select: { leads: true, deals: true } } },
     orderBy: { updatedAt: "desc" },
   });

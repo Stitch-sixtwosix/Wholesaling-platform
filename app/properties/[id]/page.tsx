@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, Section, LinkButton } from "@/components/ui";
 import { Field, Input, Textarea, Select, SubmitButton } from "@/components/Form";
 import {
@@ -20,8 +21,9 @@ export default async function PropertyDetailPage({
 }: {
   params: { id: string };
 }) {
-  const property = await prisma.property.findUnique({
-    where: { id: params.id },
+  const { orgId } = await requireUser();
+  const property = await prisma.property.findFirst({
+    where: { id: params.id, orgId },
     include: {
       comps: { orderBy: { createdAt: "desc" } },
       leads: true,

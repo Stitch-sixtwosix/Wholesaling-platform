@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, StatCard, Section, EmptyState } from "@/components/ui";
 import { Field, Input, Textarea, Select, SubmitButton } from "@/components/Form";
 import { TASK_PRIORITIES } from "@/lib/constants";
@@ -20,16 +21,20 @@ function endOfDay(d: Date): Date {
 }
 
 export default async function TasksPage() {
+  const { orgId } = await requireUser();
   const [tasks, leads, deals] = await Promise.all([
     prisma.task.findMany({
+      where: { orgId },
       include: { lead: true, deal: true, owner: true },
       orderBy: [{ status: "asc" }, { dueDate: "asc" }],
     }),
     prisma.lead.findMany({
+      where: { orgId },
       orderBy: { updatedAt: "desc" },
       select: { id: true, firstName: true, lastName: true },
     }),
     prisma.deal.findMany({
+      where: { orgId },
       orderBy: { updatedAt: "desc" },
       select: { id: true, title: true },
     }),

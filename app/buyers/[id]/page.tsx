@@ -9,12 +9,15 @@ import { addBuyerActivity, updateBuyer, deleteBuyer } from "../actions";
 import { StatusControl } from "./StatusControl";
 import { EnrichButton } from "./EnrichButton";
 import { apolloConfigured } from "@/lib/apollo";
+import { requireUser, getOrgApolloKey } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function BuyerDetailPage({ params }: { params: { id: string } }) {
-  const buyer = await prisma.buyer.findUnique({
-    where: { id: params.id },
+  const { orgId } = await requireUser();
+  const apolloKey = await getOrgApolloKey(orgId);
+  const buyer = await prisma.buyer.findFirst({
+    where: { id: params.id, orgId },
     include: {
       deals: { include: { property: true }, orderBy: { updatedAt: "desc" } },
       activities: { orderBy: { createdAt: "desc" } },
@@ -200,7 +203,7 @@ export default async function BuyerDetailPage({ params }: { params: { id: string
 
         {/* Right column */}
         <div className="space-y-6">
-          {apolloConfigured() && (!buyer.email || !buyer.phone) && (
+          {apolloConfigured(apolloKey) && (!buyer.email || !buyer.phone) && (
             <Section title="Apollo Enrichment">
               <EnrichButton buyerId={buyer.id} />
             </Section>

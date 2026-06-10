@@ -4,9 +4,11 @@ import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { enrichProspect, ApolloError } from "@/lib/apollo";
+import { requireUser, getOrgApolloKey } from "@/lib/auth";
 
 // Import an Apollo prospect into the buyers list as a new cash-buyer lead.
 export async function importProspect(formData: FormData) {
+  const { orgId } = await requireUser();
   const firstName = (formData.get("firstName") as string)?.trim() || "Unknown";
   const lastName = (formData.get("lastName") as string)?.trim() || null;
   const company = (formData.get("company") as string)?.trim() || null;
@@ -22,6 +24,7 @@ export async function importProspect(formData: FormData) {
 
   const buyer = await prisma.buyer.create({
     data: {
+      orgId,
       firstName,
       lastName,
       company,
@@ -45,7 +48,9 @@ export async function importProspect(formData: FormData) {
 // Enrich an existing buyer with Apollo (reveals verified email + phone).
 // NOTE: this consumes 1 Apollo credit per matched person (the app user's credits).
 export async function enrichBuyer(buyerId: string) {
-  const buyer = await prisma.buyer.findUnique({ where: { id: buyerId } });
+  const { orgId } = await requireUser();
+  const apolloKey = await getOrgApolloKey(orgId);
+  const buyer = await prisma.buyer.findFirst({ where: { id: buyerId, orgId } });
   if (!buyer) throw new Error("Buyer not found");
 
   // Derive a domain hint from notes if present (Domain: ...).
@@ -53,7 +58,7 @@ export async function enrichBuyer(buyerId: string) {
   const linkedinMatch = buyer.notes?.match(/(https?:\/\/[^\s]*linkedin[^\s]*)/i);
 
   try {
-    const result = await enrichProspect({
+    const result = await enrichProspect(apolloKey, {
       firstName: buyer.firstName,
       lastName: buyer.lastName ?? undefined,
       name: buyer.lastName ? undefined : buyer.firstName,

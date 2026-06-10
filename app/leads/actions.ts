@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth";
 
 function str(v: FormDataEntryValue | null): string | undefined {
   const s = (v as string | null)?.trim();
@@ -16,6 +17,7 @@ function num(v: FormDataEntryValue | null): number | undefined {
 }
 
 export async function createLead(formData: FormData) {
+  const { orgId } = await requireUser();
   const firstName = str(formData.get("firstName"));
   if (!firstName) throw new Error("First name is required");
 
@@ -25,6 +27,7 @@ export async function createLead(formData: FormData) {
   if (address) {
     const property = await prisma.property.create({
       data: {
+        orgId,
         address,
         city: str(formData.get("city")) ?? "",
         state: str(formData.get("state")) ?? "",
@@ -44,6 +47,7 @@ export async function createLead(formData: FormData) {
 
   const lead = await prisma.lead.create({
     data: {
+      orgId,
       firstName,
       lastName: str(formData.get("lastName")),
       email: str(formData.get("email")),
@@ -70,7 +74,12 @@ export async function createLead(formData: FormData) {
 }
 
 export async function updateLeadStatus(leadId: string, status: string) {
-  await prisma.lead.update({ where: { id: leadId }, data: { status, lastContact: new Date() } });
+  const { orgId } = await requireUser();
+  const updated = await prisma.lead.updateMany({
+    where: { id: leadId, orgId },
+    data: { status, lastContact: new Date() },
+  });
+  if (updated.count === 0) throw new Error("Lead not found");
   await prisma.activity.create({
     data: { type: "status_change", body: `Status changed to ${status.replace(/_/g, " ")}.`, leadId },
   });
@@ -80,24 +89,32 @@ export async function updateLeadStatus(leadId: string, status: string) {
 }
 
 export async function addLeadActivity(formData: FormData) {
+  const { orgId } = await requireUser();
   const leadId = str(formData.get("leadId"));
   const body = str(formData.get("body"));
   const type = str(formData.get("type")) ?? "note";
   if (!leadId || !body) return;
+  const lead = await prisma.lead.findFirst({ where: { id: leadId, orgId } });
+  if (!lead) throw new Error("Lead not found");
   await prisma.activity.create({ data: { leadId, body, type } });
   await prisma.lead.update({ where: { id: leadId }, data: { lastContact: new Date() } });
   revalidatePath(`/leads/${leadId}`);
 }
 
 export async function convertLeadToDeal(leadId: string) {
-  const lead = await prisma.lead.findUnique({ where: { id: leadId }, include: { property: true } });
+  const { orgId } = await requireUser();
+  const lead = await prisma.lead.findFirst({
+    where: { id: leadId, orgId },
+    include: { property: true },
+  });
   if (!lead) throw new Error("Lead not found");
 
-  const existing = await prisma.deal.findFirst({ where: { leadId } });
+  const existing = await prisma.deal.findFirst({ where: { leadId, orgId } });
   if (existing) redirect(`/pipeline/${existing.id}`);
 
   const deal = await prisma.deal.create({
     data: {
+      orgId,
       title: lead.property
         ? `${lead.property.address} — ${lead.property.city}`
         : `${lead.firstName} ${lead.lastName ?? ""}`.trim(),
@@ -117,7 +134,8 @@ export async function convertLeadToDeal(leadId: string) {
 }
 
 export async function deleteLead(leadId: string) {
-  await prisma.lead.delete({ where: { id: leadId } });
+  const { orgId } = await requireUser();
+  await prisma.lead.deleteMany({ where: { id: leadId, orgId } });
   revalidatePath("/leads");
   redirect("/leads");
 }

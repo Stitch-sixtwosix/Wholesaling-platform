@@ -4,6 +4,7 @@
 
 export interface SessionData {
   uid: string;
+  orgId: string;
   role: string;
   name: string;
   email: string;

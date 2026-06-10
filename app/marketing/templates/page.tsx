@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, Badge, Section, EmptyState, LinkButton } from "@/components/ui";
 import { Field, Input, Textarea, Select, SubmitButton } from "@/components/Form";
 import { CAMPAIGN_CHANNELS } from "@/lib/constants";
@@ -11,7 +12,8 @@ const MERGE_HINT =
   "Merge tags supported: {{firstName}}, {{address}}, {{arv}}, {{agent}}";
 
 export default async function TemplatesPage() {
-  const templates = await prisma.template.findMany({ orderBy: { updatedAt: "desc" } });
+  const { orgId } = await requireUser();
+  const templates = await prisma.template.findMany({ where: { orgId }, orderBy: { updatedAt: "desc" } });
 
   return (
     <div className="mx-auto max-w-3xl">

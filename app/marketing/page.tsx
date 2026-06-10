@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, Badge, DataTable, EmptyState, LinkButton, StatCard, Section } from "@/components/ui";
 import { ChannelChart } from "@/components/Charts";
 import { CAMPAIGN_CHANNELS, CAMPAIGN_STATUSES, labelOf } from "@/lib/constants";
@@ -8,11 +9,13 @@ import { currency, number, percent } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function MarketingPage() {
+  const { orgId } = await requireUser();
   const campaigns = await prisma.campaign.findMany({
+    where: { orgId },
     include: { template: true },
     orderBy: { updatedAt: "desc" },
   });
-  const templateCount = await prisma.template.count();
+  const templateCount = await prisma.template.count({ where: { orgId } });
 
   const totalCost = campaigns.reduce((sum, c) => sum + (c.cost ?? 0), 0);
   const totalResponses = campaigns.reduce((sum, c) => sum + (c.responses ?? 0), 0);

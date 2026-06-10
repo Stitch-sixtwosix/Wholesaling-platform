@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, Badge, StatCard, DataTable, EmptyState, LinkButton } from "@/components/ui";
 import { BUYER_TYPES, BUYER_STATUSES, labelOf } from "@/lib/constants";
 import { currency, fullName } from "@/lib/format";
@@ -11,10 +12,12 @@ export default async function BuyersPage({
 }: {
   searchParams: { status?: string; q?: string };
 }) {
+  const { orgId } = await requireUser();
   const { status, q } = searchParams;
 
   const buyers = await prisma.buyer.findMany({
     where: {
+      orgId,
       ...(status ? { status } : {}),
       ...(q
         ? {
@@ -30,11 +33,11 @@ export default async function BuyersPage({
     orderBy: { updatedAt: "desc" },
   });
 
-  const counts = await prisma.buyer.groupBy({ by: ["status"], _count: true });
+  const counts = await prisma.buyer.groupBy({ by: ["status"], where: { orgId }, _count: true });
   const countFor = (s: string) => counts.find((c) => c.status === s)?._count ?? 0;
   const total = counts.reduce((sum, c) => sum + c._count, 0);
   const vipCount = countFor("vip");
-  const pofCount = await prisma.buyer.count({ where: { proofOfFunds: true } });
+  const pofCount = await prisma.buyer.count({ where: { orgId, proofOfFunds: true } });
 
   const priceRange = (min: number | null, max: number | null) => {
     if (min === null && max === null) return "—";

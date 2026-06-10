@@ -14,6 +14,7 @@ export async function authenticate(email: string, password: string): Promise<Ses
 
   const data: SessionData = {
     uid: user.id,
+    orgId: user.orgId,
     role: user.role,
     name: user.name,
     email: user.email,
@@ -50,4 +51,13 @@ export async function requireAdmin(): Promise<SessionData> {
 
 export function destroySession() {
   cookies().delete(SESSION_COOKIE);
+}
+
+// Per-organization Apollo.io API key (set in Settings → Integrations).
+export async function getOrgApolloKey(orgId: string): Promise<string | null> {
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { apolloApiKey: true },
+  });
+  return org?.apolloApiKey ?? null;
 }

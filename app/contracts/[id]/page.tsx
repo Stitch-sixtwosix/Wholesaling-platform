@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, Badge, Section, LinkButton } from "@/components/ui";
 import { Field, Input, Textarea, Select, SubmitButton } from "@/components/Form";
 import { CONTRACT_TYPES, CONTRACT_STATUSES, labelOf } from "@/lib/constants";
@@ -20,8 +21,9 @@ function dateInput(value: Date | string | null | undefined): string {
 }
 
 export default async function ContractDetailPage({ params }: { params: { id: string } }) {
-  const contract = await prisma.contract.findUnique({
-    where: { id: params.id },
+  const { orgId } = await requireUser();
+  const contract = await prisma.contract.findFirst({
+    where: { id: params.id, orgId },
     include: { deal: true },
   });
   if (!contract) notFound();

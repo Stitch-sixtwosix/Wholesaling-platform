@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, Section, LinkButton } from "@/components/ui";
 import { Field, Input, Select, SubmitButton } from "@/components/Form";
 import { CONTRACT_TYPES, CONTRACT_STATUSES } from "@/lib/constants";
@@ -7,7 +8,9 @@ import { createContract } from "../actions";
 export const dynamic = "force-dynamic";
 
 export default async function NewContractPage() {
+  const { orgId } = await requireUser();
   const deals = await prisma.deal.findMany({
+    where: { orgId },
     select: { id: true, title: true },
     orderBy: { updatedAt: "desc" },
   });

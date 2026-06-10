@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader, Section, EmptyState, LinkButton } from "@/components/ui";
 import { Field, Input } from "@/components/Form";
 import { apolloConfigured, searchProspects, ApolloError, type ApolloProspect } from "@/lib/apollo";
+import { requireUser, getOrgApolloKey } from "@/lib/auth";
 import { importProspect } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,9 @@ export default async function DiscoverBuyersPage({
 }: {
   searchParams: { q?: string; location?: string; page?: string };
 }) {
-  const configured = apolloConfigured();
+  const { orgId } = await requireUser();
+  const apolloKey = await getOrgApolloKey(orgId);
+  const configured = apolloConfigured(apolloKey);
   const q = searchParams.q?.trim() || "";
   const location = searchParams.location?.trim() || "";
   const page = Math.max(1, Number(searchParams.page) || 1);
@@ -34,7 +37,7 @@ export default async function DiscoverBuyersPage({
 
   if (configured && hasSearched) {
     try {
-      const data = await searchProspects({
+      const data = await searchProspects(apolloKey, {
         keywords: q || "real estate investor",
         titles: DEFAULT_TITLES,
         locations: location ? [location] : undefined,
@@ -65,7 +68,8 @@ export default async function DiscoverBuyersPage({
       {!configured && (
         <EmptyState
           title="Apollo isn't connected yet"
-          description="Add APOLLO_API_KEY to your environment (.env) to enable buyer discovery and enrichment. Get a key from Apollo.io → Settings → API."
+          description="Connect your Apollo account in Settings to enable buyer discovery and enrichment. Get a key from Apollo.io → Settings → API."
+          action={<LinkButton href="/settings">Go to Settings</LinkButton>}
         />
       )}
 

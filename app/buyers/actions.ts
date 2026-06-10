@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth";
 
 function str(v: FormDataEntryValue | null): string | undefined {
   const s = (v as string | null)?.trim();
@@ -19,6 +20,7 @@ function bool(v: FormDataEntryValue | null): boolean {
 }
 
 export async function createBuyer(formData: FormData) {
+  const { orgId } = await requireUser();
   const firstName = str(formData.get("firstName"));
   if (!firstName) throw new Error("First name is required");
 
@@ -26,6 +28,7 @@ export async function createBuyer(formData: FormData) {
 
   const buyer = await prisma.buyer.create({
     data: {
+      orgId,
       firstName,
       lastName: str(formData.get("lastName")),
       company: str(formData.get("company")),
@@ -54,6 +57,7 @@ export async function createBuyer(formData: FormData) {
 }
 
 export async function updateBuyer(formData: FormData) {
+  const { orgId } = await requireUser();
   const id = str(formData.get("id"));
   if (!id) throw new Error("Buyer id is required");
   const firstName = str(formData.get("firstName"));
@@ -61,8 +65,8 @@ export async function updateBuyer(formData: FormData) {
 
   const propertyTypes = formData.getAll("propertyTypes").map((v) => (v as string).trim()).filter(Boolean).join(", ");
 
-  await prisma.buyer.update({
-    where: { id },
+  await prisma.buyer.updateMany({
+    where: { id, orgId },
     data: {
       firstName,
       lastName: str(formData.get("lastName")) ?? null,
@@ -88,7 +92,9 @@ export async function updateBuyer(formData: FormData) {
 }
 
 export async function updateBuyerStatus(buyerId: string, status: string) {
-  await prisma.buyer.update({ where: { id: buyerId }, data: { status } });
+  const { orgId } = await requireUser();
+  const updated = await prisma.buyer.updateMany({ where: { id: buyerId, orgId }, data: { status } });
+  if (updated.count === 0) throw new Error("Buyer not found");
   await prisma.activity.create({
     data: { type: "status_change", body: `Status changed to ${status.replace(/_/g, " ")}.`, buyerId },
   });
@@ -97,16 +103,20 @@ export async function updateBuyerStatus(buyerId: string, status: string) {
 }
 
 export async function addBuyerActivity(formData: FormData) {
+  const { orgId } = await requireUser();
   const buyerId = str(formData.get("buyerId"));
   const body = str(formData.get("body"));
   const type = str(formData.get("type")) ?? "note";
   if (!buyerId || !body) return;
+  const buyer = await prisma.buyer.findFirst({ where: { id: buyerId, orgId } });
+  if (!buyer) throw new Error("Buyer not found");
   await prisma.activity.create({ data: { buyerId, body, type } });
   revalidatePath(`/buyers/${buyerId}`);
 }
 
 export async function deleteBuyer(buyerId: string) {
-  await prisma.buyer.delete({ where: { id: buyerId } });
+  const { orgId } = await requireUser();
+  await prisma.buyer.deleteMany({ where: { id: buyerId, orgId } });
   revalidatePath("/buyers");
   redirect("/buyers");
 }

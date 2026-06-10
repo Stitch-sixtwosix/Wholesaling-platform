@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, Section, LinkButton } from "@/components/ui";
 import { Field, Input, Select, SubmitButton } from "@/components/Form";
 import { CAMPAIGN_CHANNELS, CAMPAIGN_STATUSES } from "@/lib/constants";
@@ -7,7 +8,8 @@ import { createCampaign } from "../actions";
 export const dynamic = "force-dynamic";
 
 export default async function NewCampaignPage() {
-  const templates = await prisma.template.findMany({ orderBy: { name: "asc" } });
+  const { orgId } = await requireUser();
+  const templates = await prisma.template.findMany({ where: { orgId }, orderBy: { name: "asc" } });
   const templateOptions = templates.map((t) => ({ value: t.id, label: t.name }));
 
   return (

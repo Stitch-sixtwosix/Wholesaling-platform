@@ -1,9 +1,19 @@
+import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { PageHeader, Section, Badge, DataTable } from "@/components/ui";
 import { Field, Input, Select, SubmitButton } from "@/components/Form";
 import { relativeTime } from "@/lib/format";
-import { createUser, deleteUser, setUserActive, setUserRole, resetPassword } from "./actions";
+import {
+  createUser,
+  createInvitation,
+  deleteInvitation,
+  deleteUser,
+  setUserActive,
+  setUserRole,
+  resetPassword,
+} from "./actions";
+import { CopyLink } from "./CopyLink";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +33,26 @@ const ROLE_BADGES = [
 
 export default async function TeamPage() {
   const me = await requireAdmin();
-  const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
+  const [org, users, invitations] = await Promise.all([
+    prisma.organization.findUnique({ where: { id: me.orgId } }),
+    prisma.user.findMany({ where: { orgId: me.orgId }, orderBy: { createdAt: "asc" } }),
+    prisma.invitation.findMany({
+      where: { orgId: me.orgId, accepted: false },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  // Build an absolute base URL for shareable invite links.
+  const h = headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  const baseUrl = `${proto}://${host}`;
 
   return (
     <div>
       <PageHeader
         title="Team & Access"
-        subtitle="Create and manage logins for your acquisition and disposition managers."
+        subtitle={`Invite and manage logins for ${org?.name ?? "your organization"}.`}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -105,6 +128,32 @@ export default async function TeamPage() {
             </tbody>
           </DataTable>
 
+          {invitations.length > 0 && (
+            <Section title="Pending Invitations" className="mt-6">
+              <div className="divide-y divide-slate-100">
+                {invitations.map((inv) => {
+                  const remove = deleteInvitation.bind(null, inv.id);
+                  return (
+                    <div key={inv.id} className="flex flex-wrap items-center gap-3 p-4">
+                      <div className="min-w-[160px] flex-1">
+                        <p className="text-sm font-medium text-slate-800">{inv.email}</p>
+                        <p className="text-xs text-slate-400">
+                          <Badge options={ROLE_BADGES} value={inv.role} /> · invited {relativeTime(inv.createdAt)}
+                        </p>
+                      </div>
+                      <CopyLink url={`${baseUrl}/invite/${inv.token}`} />
+                      <form action={remove}>
+                        <button type="submit" className="btn-ghost text-xs text-rose-600">
+                          Revoke
+                        </button>
+                      </form>
+                    </div>
+                  );
+                })}
+              </div>
+            </Section>
+          )}
+
           <Section title="Reset a Password" className="mt-6">
             <form action={resetPassword} className="flex flex-wrap items-end gap-3 p-5">
               <Field label="User" className="min-w-[200px] flex-1">
@@ -122,13 +171,29 @@ export default async function TeamPage() {
         </div>
 
         <div>
-          <Section title="Add a Login">
+          <Section title="Invite a Teammate">
+            <form action={createInvitation} className="space-y-4 p-5">
+              <Field label="Email">
+                <Input name="email" type="email" required placeholder="alex@yourcompany.com" />
+              </Field>
+              <Field label="Role">
+                <Select name="role" options={ROLES.map((r) => ({ value: r.value, label: r.label }))} defaultValue="acquisitions" />
+              </Field>
+              <SubmitButton className="w-full">Create Invite Link</SubmitButton>
+              <p className="text-xs text-slate-400">
+                Generates a shareable link. Send it to your teammate — they set their own
+                password and join {org?.name ?? "your org"}.
+              </p>
+            </form>
+          </Section>
+
+          <Section title="Or Add a Login Directly" className="mt-4">
             <form action={createUser} className="space-y-4 p-5">
               <Field label="Full Name">
                 <Input name="name" required placeholder="Alex Rivera" />
               </Field>
               <Field label="Email">
-                <Input name="email" type="email" required placeholder="alex@wholesaleos.com" />
+                <Input name="email" type="email" required placeholder="alex@yourcompany.com" />
               </Field>
               <Field label="Role">
                 <Select name="role" options={ROLES.map((r) => ({ value: r.value, label: r.label }))} defaultValue="acquisitions" />

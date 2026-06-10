@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth";
 
 function str(v: FormDataEntryValue | null): string | undefined {
   const s = (v as string | null)?.trim();
@@ -16,11 +17,13 @@ function num(v: FormDataEntryValue | null): number | undefined {
 }
 
 export async function createProperty(formData: FormData) {
+  const { orgId } = await requireUser();
   const address = str(formData.get("address"));
   if (!address) throw new Error("Address is required");
 
   const property = await prisma.property.create({
     data: {
+      orgId,
       address,
       city: str(formData.get("city")) ?? "",
       state: str(formData.get("state")) ?? "",
@@ -48,13 +51,14 @@ export async function createProperty(formData: FormData) {
 }
 
 export async function updateProperty(formData: FormData) {
+  const { orgId } = await requireUser();
   const id = str(formData.get("id"));
   if (!id) throw new Error("Property id is required");
   const address = str(formData.get("address"));
   if (!address) throw new Error("Address is required");
 
-  await prisma.property.update({
-    where: { id },
+  await prisma.property.updateMany({
+    where: { id, orgId },
     data: {
       address,
       city: str(formData.get("city")) ?? "",
@@ -83,12 +87,17 @@ export async function updateProperty(formData: FormData) {
 }
 
 export async function addComp(formData: FormData) {
+  const { orgId } = await requireUser();
   const propertyId = str(formData.get("propertyId"));
   const address = str(formData.get("address"));
   const salePrice = num(formData.get("salePrice"));
   if (!propertyId || !address || salePrice === undefined) {
     throw new Error("Property, address, and sale price are required");
   }
+
+  // Comps have no orgId — guard via the parent property's org.
+  const property = await prisma.property.findFirst({ where: { id: propertyId, orgId } });
+  if (!property) throw new Error("Property not found");
 
   const saleDateRaw = str(formData.get("saleDate"));
 
@@ -110,6 +119,10 @@ export async function addComp(formData: FormData) {
 }
 
 export async function deleteComp(compId: string, propertyId: string) {
-  await prisma.comp.delete({ where: { id: compId } });
+  const { orgId } = await requireUser();
+  // Only allow deleting comps belonging to a property in this org.
+  const property = await prisma.property.findFirst({ where: { id: propertyId, orgId } });
+  if (!property) throw new Error("Property not found");
+  await prisma.comp.deleteMany({ where: { id: compId, propertyId } });
   revalidatePath(`/properties/${propertyId}`);
 }

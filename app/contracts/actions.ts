@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { generateContractBody } from "@/lib/contracts";
 import { labelOf, CONTRACT_TYPES } from "@/lib/constants";
+import { requireUser } from "@/lib/auth";
 
 function str(v: FormDataEntryValue | null): string | undefined {
   const s = (v as string | null)?.trim();
@@ -23,7 +24,15 @@ function dateVal(v: FormDataEntryValue | null): Date | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
+// Only accept a dealId that belongs to this org; otherwise drop it.
+async function safeDealId(orgId: string, dealId: string | undefined): Promise<string | undefined> {
+  if (!dealId) return undefined;
+  const deal = await prisma.deal.findFirst({ where: { id: dealId, orgId } });
+  return deal ? dealId : undefined;
+}
+
 export async function createContract(formData: FormData) {
+  const { orgId } = await requireUser();
   const type = str(formData.get("type")) ?? "purchase";
   const propertyAddress = str(formData.get("propertyAddress"));
   const buyerName = str(formData.get("buyerName"));
@@ -52,10 +61,11 @@ export async function createContract(formData: FormData) {
 
   const contract = await prisma.contract.create({
     data: {
+      orgId,
       type,
       title,
       status: str(formData.get("status")) ?? "draft",
-      dealId: str(formData.get("dealId")),
+      dealId: await safeDealId(orgId, str(formData.get("dealId"))),
       buyerName,
       sellerName,
       propertyAddress,
@@ -73,6 +83,7 @@ export async function createContract(formData: FormData) {
 }
 
 export async function updateContract(formData: FormData) {
+  const { orgId } = await requireUser();
   const id = str(formData.get("id"));
   if (!id) throw new Error("Contract id is required");
 
@@ -106,13 +117,13 @@ export async function updateContract(formData: FormData) {
       inspectionDays,
     });
 
-  await prisma.contract.update({
-    where: { id },
+  await prisma.contract.updateMany({
+    where: { id, orgId },
     data: {
       type,
       title,
       status: str(formData.get("status")) ?? "draft",
-      dealId: str(formData.get("dealId")) ?? null,
+      dealId: (await safeDealId(orgId, str(formData.get("dealId")))) ?? null,
       buyerName: buyerName ?? null,
       sellerName: sellerName ?? null,
       propertyAddress: propertyAddress ?? null,
@@ -130,7 +141,8 @@ export async function updateContract(formData: FormData) {
 }
 
 export async function updateContractStatus(contractId: string, status: string) {
-  const existing = await prisma.contract.findUnique({ where: { id: contractId } });
+  const { orgId } = await requireUser();
+  const existing = await prisma.contract.findFirst({ where: { id: contractId, orgId } });
   if (!existing) throw new Error("Contract not found");
 
   const data: { status: string; sentDate?: Date; signedDate?: Date } = { status };
@@ -146,7 +158,8 @@ export async function updateContractStatus(contractId: string, status: string) {
 }
 
 export async function deleteContract(contractId: string) {
-  await prisma.contract.delete({ where: { id: contractId } });
+  const { orgId } = await requireUser();
+  await prisma.contract.deleteMany({ where: { id: contractId, orgId } });
   revalidatePath("/contracts");
   redirect("/contracts");
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, StatCard, LinkButton } from "@/components/ui";
 import { DEAL_STAGES } from "@/lib/constants";
 import { currency } from "@/lib/format";
@@ -7,7 +8,9 @@ import { currency } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function PipelinePage() {
+  const { orgId } = await requireUser();
   const deals = await prisma.deal.findMany({
+    where: { orgId },
     include: { lead: true, property: true, buyer: true },
     orderBy: { updatedAt: "desc" },
   });

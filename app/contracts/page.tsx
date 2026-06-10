@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, StatCard, Badge, DataTable, EmptyState, LinkButton } from "@/components/ui";
 import { CONTRACT_TYPES, CONTRACT_STATUSES, labelOf } from "@/lib/constants";
 import { currency, date } from "@/lib/format";
@@ -11,19 +12,20 @@ export default async function ContractsPage({
 }: {
   searchParams: { type?: string };
 }) {
+  const { orgId } = await requireUser();
   const { type } = searchParams;
 
   const contracts = await prisma.contract.findMany({
-    where: { ...(type ? { type } : {}) },
+    where: { orgId, ...(type ? { type } : {}) },
     include: { deal: true },
     orderBy: { updatedAt: "desc" },
   });
 
-  const typeCounts = await prisma.contract.groupBy({ by: ["type"], _count: true });
+  const typeCounts = await prisma.contract.groupBy({ by: ["type"], where: { orgId }, _count: true });
   const countFor = (t: string) => typeCounts.find((c) => c.type === t)?._count ?? 0;
   const total = typeCounts.reduce((sum, c) => sum + c._count, 0);
 
-  const allContracts = type ? await prisma.contract.findMany() : contracts;
+  const allContracts = type ? await prisma.contract.findMany({ where: { orgId } }) : contracts;
   const executedCount = allContracts.filter((c) => c.status === "executed").length;
   const feesOnExecuted = allContracts
     .filter((c) => c.status === "executed" || c.status === "signed")

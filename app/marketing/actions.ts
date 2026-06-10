@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth";
 
 function str(v: FormDataEntryValue | null): string | undefined {
   const s = (v as string | null)?.trim();
@@ -22,11 +23,13 @@ function dateVal(v: FormDataEntryValue | null): Date | undefined {
 }
 
 export async function createCampaign(formData: FormData) {
+  const { orgId } = await requireUser();
   const name = str(formData.get("name"));
   if (!name) throw new Error("Campaign name is required");
 
   const campaign = await prisma.campaign.create({
     data: {
+      orgId,
       name,
       channel: str(formData.get("channel")) ?? "sms",
       status: str(formData.get("status")) ?? "draft",
@@ -47,13 +50,14 @@ export async function createCampaign(formData: FormData) {
 }
 
 export async function updateCampaign(formData: FormData) {
+  const { orgId } = await requireUser();
   const id = str(formData.get("id"));
   if (!id) throw new Error("Campaign id is required");
   const name = str(formData.get("name"));
   if (!name) throw new Error("Campaign name is required");
 
-  await prisma.campaign.update({
-    where: { id },
+  await prisma.campaign.updateMany({
+    where: { id, orgId },
     data: {
       name,
       channel: str(formData.get("channel")) ?? "sms",
@@ -75,23 +79,27 @@ export async function updateCampaign(formData: FormData) {
 }
 
 export async function updateCampaignStatus(campaignId: string, status: string) {
-  await prisma.campaign.update({ where: { id: campaignId }, data: { status } });
+  const { orgId } = await requireUser();
+  await prisma.campaign.updateMany({ where: { id: campaignId, orgId }, data: { status } });
   revalidatePath("/marketing");
   revalidatePath(`/marketing/${campaignId}`);
 }
 
 export async function deleteCampaign(campaignId: string) {
-  await prisma.campaign.delete({ where: { id: campaignId } });
+  const { orgId } = await requireUser();
+  await prisma.campaign.deleteMany({ where: { id: campaignId, orgId } });
   revalidatePath("/marketing");
   redirect("/marketing");
 }
 
 export async function createTemplate(formData: FormData) {
+  const { orgId } = await requireUser();
   const name = str(formData.get("name"));
   if (!name) throw new Error("Template name is required");
 
   await prisma.template.create({
     data: {
+      orgId,
       name,
       channel: str(formData.get("channel")) ?? "sms",
       subject: str(formData.get("subject")),
@@ -104,13 +112,14 @@ export async function createTemplate(formData: FormData) {
 }
 
 export async function updateTemplate(formData: FormData) {
+  const { orgId } = await requireUser();
   const id = str(formData.get("id"));
   if (!id) throw new Error("Template id is required");
   const name = str(formData.get("name"));
   if (!name) throw new Error("Template name is required");
 
-  await prisma.template.update({
-    where: { id },
+  await prisma.template.updateMany({
+    where: { id, orgId },
     data: {
       name,
       channel: str(formData.get("channel")) ?? "sms",
@@ -123,6 +132,7 @@ export async function updateTemplate(formData: FormData) {
 }
 
 export async function deleteTemplate(templateId: string) {
-  await prisma.template.delete({ where: { id: templateId } });
+  const { orgId } = await requireUser();
+  await prisma.template.deleteMany({ where: { id: templateId, orgId } });
   revalidatePath("/marketing/templates");
 }

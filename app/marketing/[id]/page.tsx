@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, StatCard, Section, LinkButton } from "@/components/ui";
 import { Field, Input, Select, SubmitButton } from "@/components/Form";
 import { CAMPAIGN_CHANNELS, CAMPAIGN_STATUSES, labelOf } from "@/lib/constants";
@@ -15,8 +16,9 @@ function toInput(d: Date | null | undefined): string {
 }
 
 export default async function CampaignDetailPage({ params }: { params: { id: string } }) {
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: params.id },
+  const { orgId } = await requireUser();
+  const campaign = await prisma.campaign.findFirst({
+    where: { id: params.id, orgId },
     include: {
       template: true,
       members: { include: { lead: true, buyer: true }, orderBy: { createdAt: "desc" } },
@@ -24,7 +26,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
   });
   if (!campaign) notFound();
 
-  const templates = await prisma.template.findMany({ orderBy: { name: "asc" } });
+  const templates = await prisma.template.findMany({ where: { orgId }, orderBy: { name: "asc" } });
   const templateOptions = templates.map((t) => ({ value: t.id, label: t.name }));
 
   const respRate = campaign.delivered > 0 ? (campaign.responses / campaign.delivered) * 100 : null;

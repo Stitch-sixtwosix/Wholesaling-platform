@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth";
 
 function str(v: FormDataEntryValue | null): string | undefined {
   const s = (v as string | null)?.trim();
@@ -22,11 +23,13 @@ function dateOrUndef(v: FormDataEntryValue | null): Date | undefined {
 }
 
 export async function createDeal(formData: FormData) {
+  const { orgId } = await requireUser();
   const title = str(formData.get("title"));
   if (!title) throw new Error("Title is required");
 
   const deal = await prisma.deal.create({
     data: {
+      orgId,
       title,
       stage: str(formData.get("stage")) ?? "lead",
       arv: num(formData.get("arv")),
@@ -48,15 +51,17 @@ export async function createDeal(formData: FormData) {
 }
 
 export async function updateDealStage(dealId: string, stage: string) {
+  const { orgId } = await requireUser();
   const status = stage === "closed" ? "won" : stage === "dead" ? "lost" : "active";
-  await prisma.deal.update({
-    where: { id: dealId },
+  const updated = await prisma.deal.updateMany({
+    where: { id: dealId, orgId },
     data: {
       stage,
       status,
       ...(stage === "closed" ? { closedDate: new Date() } : {}),
     },
   });
+  if (updated.count === 0) throw new Error("Deal not found");
   await prisma.activity.create({
     data: {
       type: "status_change",
@@ -69,8 +74,18 @@ export async function updateDealStage(dealId: string, stage: string) {
 }
 
 export async function assignBuyer(dealId: string, buyerId: string) {
+  const { orgId } = await requireUser();
   const id = buyerId.trim() || null;
-  await prisma.deal.update({ where: { id: dealId }, data: { buyerId: id } });
+  // Ensure the buyer (if any) is in the same org before linking.
+  if (id) {
+    const buyer = await prisma.buyer.findFirst({ where: { id, orgId } });
+    if (!buyer) throw new Error("Buyer not found");
+  }
+  const updated = await prisma.deal.updateMany({
+    where: { id: dealId, orgId },
+    data: { buyerId: id },
+  });
+  if (updated.count === 0) throw new Error("Deal not found");
   await prisma.activity.create({
     data: {
       type: "system",
@@ -83,10 +98,11 @@ export async function assignBuyer(dealId: string, buyerId: string) {
 }
 
 export async function updateDealEconomics(formData: FormData) {
+  const { orgId } = await requireUser();
   const dealId = str(formData.get("dealId"));
   if (!dealId) return;
-  await prisma.deal.update({
-    where: { id: dealId },
+  await prisma.deal.updateMany({
+    where: { id: dealId, orgId },
     data: {
       arv: num(formData.get("arv")) ?? null,
       repairEstimate: num(formData.get("repairEstimate")) ?? null,
@@ -103,10 +119,13 @@ export async function updateDealEconomics(formData: FormData) {
 }
 
 export async function addDealActivity(formData: FormData) {
+  const { orgId } = await requireUser();
   const dealId = str(formData.get("dealId"));
   const body = str(formData.get("body"));
   const type = str(formData.get("type")) ?? "note";
   if (!dealId || !body) return;
+  const deal = await prisma.deal.findFirst({ where: { id: dealId, orgId } });
+  if (!deal) throw new Error("Deal not found");
   await prisma.activity.create({ data: { dealId, body, type } });
   revalidatePath(`/pipeline/${dealId}`);
 }

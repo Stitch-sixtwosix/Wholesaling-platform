@@ -3,6 +3,10 @@ import { verifySession, sessionSecret, canAccess, SESSION_COOKIE } from "@/lib/s
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Invitation acceptance is reachable without an existing session.
+  if (pathname.startsWith("/invite")) return NextResponse.next();
+
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySession(token, sessionSecret()) : null;
 

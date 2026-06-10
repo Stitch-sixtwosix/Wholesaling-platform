@@ -38,10 +38,19 @@ async function main() {
   await prisma.property.deleteMany();
   await prisma.buyer.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.invitation.deleteMany();
+  await prisma.organization.deleteMany();
+
+  // Demo organization — all demo data lives inside this tenant.
+  const org = await prisma.organization.create({
+    data: { name: "Demo Workspace" },
+  });
+  const orgId = org.id;
 
   // Users — with login credentials (demo passwords)
   const admin = await prisma.user.create({
     data: {
+      orgId,
       name: "Jordan Pierce",
       email: "jordan@wholesaleos.com",
       role: "admin",
@@ -50,6 +59,7 @@ async function main() {
   });
   const acq = await prisma.user.create({
     data: {
+      orgId,
       name: "Maya Chen",
       email: "maya@wholesaleos.com",
       role: "acquisitions",
@@ -58,6 +68,7 @@ async function main() {
   });
   const dispo = await prisma.user.create({
     data: {
+      orgId,
       name: "Devon Brooks",
       email: "devon@wholesaleos.com",
       role: "dispositions",
@@ -78,7 +89,7 @@ async function main() {
   ];
   const properties = [];
   for (const p of propData) {
-    properties.push(await prisma.property.create({ data: { ...p, county: "—" } }));
+    properties.push(await prisma.property.create({ data: { ...p, orgId, county: "—" } }));
   }
 
   // Comps for the first property
@@ -109,6 +120,7 @@ async function main() {
       await prisma.lead.create({
         data: {
           ...rest,
+          orgId,
           propertyId: propertyIdx !== null ? properties[propertyIdx].id : null,
           lastContact: daysAgo(Math.floor(Math.random() * 14)),
           createdAt: daysAgo(Math.floor(Math.random() * 60) + 1),
@@ -128,7 +140,7 @@ async function main() {
   ];
   const buyers = [];
   for (const b of buyerData) {
-    buyers.push(await prisma.buyer.create({ data: { ...b, cashBuyer: true } }));
+    buyers.push(await prisma.buyer.create({ data: { ...b, orgId, cashBuyer: true } }));
   }
 
   // Deals
@@ -149,6 +161,7 @@ async function main() {
       await prisma.deal.create({
         data: {
           ...rest,
+          orgId,
           leadId: leadIdx !== undefined ? leads[leadIdx].id : null,
           propertyId: propertyIdx !== undefined ? properties[propertyIdx].id : null,
           buyerId: buyerIdx !== undefined ? buyers[buyerIdx].id : null,
@@ -161,6 +174,7 @@ async function main() {
   // Templates
   const smsTemplate = await prisma.template.create({
     data: {
+      orgId,
       name: "Cold Seller — First Touch",
       channel: "sms",
       body: "Hi {{firstName}}, I'm a local investor interested in your property at {{address}}. Would you consider a cash offer with a flexible closing date? — {{agent}}",
@@ -168,6 +182,7 @@ async function main() {
   });
   const emailTemplate = await prisma.template.create({
     data: {
+      orgId,
       name: "New Deal Blast",
       channel: "email",
       subject: "🔥 Off-Market Deal: {{address}} — {{arv}} ARV",
@@ -176,6 +191,7 @@ async function main() {
   });
   await prisma.template.create({
     data: {
+      orgId,
       name: "Direct Mail — Yellow Letter",
       channel: "direct_mail",
       body: "Dear {{firstName}}, I would like to buy your house at {{address}}. I can pay cash and close quickly. Please call me at {{phone}}.",
@@ -184,42 +200,42 @@ async function main() {
 
   // Campaigns
   await prisma.campaign.create({
-    data: { name: "Memphis Absentee Owners — Q2", channel: "sms", status: "active", audience: "2,400 absentee owners, 38109/38127", sent: 2400, delivered: 2210, responses: 168, leads: 42, cost: 480, templateId: smsTemplate.id, startDate: daysAgo(20) },
+    data: { orgId, name: "Memphis Absentee Owners — Q2", channel: "sms", status: "active", audience: "2,400 absentee owners, 38109/38127", sent: 2400, delivered: 2210, responses: 168, leads: 42, cost: 480, templateId: smsTemplate.id, startDate: daysAgo(20) },
   });
   await prisma.campaign.create({
-    data: { name: "Cleveland Pre-Foreclosure Mailer", channel: "direct_mail", status: "active", audience: "850 pre-foreclosure, Cuyahoga County", sent: 850, delivered: 820, responses: 31, leads: 11, cost: 1275, startDate: daysAgo(35) },
+    data: { orgId, name: "Cleveland Pre-Foreclosure Mailer", channel: "direct_mail", status: "active", audience: "850 pre-foreclosure, Cuyahoga County", sent: 850, delivered: 820, responses: 31, leads: 11, cost: 1275, startDate: daysAgo(35) },
   });
   await prisma.campaign.create({
-    data: { name: "VIP Buyer Deal Blast", channel: "email", status: "active", audience: "Cash buyers list (6)", sent: 6, delivered: 6, responses: 4, leads: 0, cost: 0, templateId: emailTemplate.id, startDate: daysAgo(3) },
+    data: { orgId, name: "VIP Buyer Deal Blast", channel: "email", status: "active", audience: "Cash buyers list (6)", sent: 6, delivered: 6, responses: 4, leads: 0, cost: 0, templateId: emailTemplate.id, startDate: daysAgo(3) },
   });
   await prisma.campaign.create({
-    data: { name: "Tampa Cold Call Sprint", channel: "cold_call", status: "completed", audience: "1,100 high-equity, Hillsborough", sent: 1100, delivered: 640, responses: 95, leads: 18, cost: 900, startDate: daysAgo(50), endDate: daysAgo(20) },
+    data: { orgId, name: "Tampa Cold Call Sprint", channel: "cold_call", status: "completed", audience: "1,100 high-equity, Hillsborough", sent: 1100, delivered: 640, responses: 95, leads: 18, cost: 900, startDate: daysAgo(50), endDate: daysAgo(20) },
   });
   await prisma.campaign.create({
-    data: { name: "Birmingham RVM Drop", channel: "rvm", status: "draft", audience: "1,800 tired landlords", sent: 0, delivered: 0, responses: 0, leads: 0, cost: 0 },
+    data: { orgId, name: "Birmingham RVM Drop", channel: "rvm", status: "draft", audience: "1,800 tired landlords", sent: 0, delivered: 0, responses: 0, leads: 0, cost: 0 },
   });
 
   // Contracts
   await prisma.contract.create({
-    data: { type: "purchase", title: "Purchase — 2841 Maple Grove Dr", status: "executed", dealId: deals[0].id, buyerName: "WholesaleOS LLC", sellerName: "Robert Hayes", propertyAddress: "2841 Maple Grove Dr, Memphis, TN 38109", purchasePrice: 88000, earnestMoney: 1000, inspectionDays: 10, closingDate: daysFromNow(12), signedDate: daysAgo(5) },
+    data: { orgId, type: "purchase", title: "Purchase — 2841 Maple Grove Dr", status: "executed", dealId: deals[0].id, buyerName: "WholesaleOS LLC", sellerName: "Robert Hayes", propertyAddress: "2841 Maple Grove Dr, Memphis, TN 38109", purchasePrice: 88000, earnestMoney: 1000, inspectionDays: 10, closingDate: daysFromNow(12), signedDate: daysAgo(5) },
   });
   await prisma.contract.create({
-    data: { type: "assignment", title: "Assignment — 2841 Maple Grove Dr", status: "signed", dealId: deals[0].id, buyerName: "Bluestone Capital", sellerName: "WholesaleOS LLC", propertyAddress: "2841 Maple Grove Dr, Memphis, TN 38109", purchasePrice: 88000, assignmentFee: 12000, closingDate: daysFromNow(12), signedDate: daysAgo(2) },
+    data: { orgId, type: "assignment", title: "Assignment — 2841 Maple Grove Dr", status: "signed", dealId: deals[0].id, buyerName: "Bluestone Capital", sellerName: "WholesaleOS LLC", propertyAddress: "2841 Maple Grove Dr, Memphis, TN 38109", purchasePrice: 88000, assignmentFee: 12000, closingDate: daysFromNow(12), signedDate: daysAgo(2) },
   });
   await prisma.contract.create({
-    data: { type: "purchase", title: "Purchase — 1130 Elmwood Cir", status: "executed", dealId: deals[5].id, buyerName: "WholesaleOS LLC", sellerName: "Carlos Mendez", propertyAddress: "1130 Elmwood Cir, Birmingham, AL 35211", purchasePrice: 105000, earnestMoney: 1000, inspectionDays: 7, closingDate: daysAgo(8), signedDate: daysAgo(20) },
+    data: { orgId, type: "purchase", title: "Purchase — 1130 Elmwood Cir", status: "executed", dealId: deals[5].id, buyerName: "WholesaleOS LLC", sellerName: "Carlos Mendez", propertyAddress: "1130 Elmwood Cir, Birmingham, AL 35211", purchasePrice: 105000, earnestMoney: 1000, inspectionDays: 7, closingDate: daysAgo(8), signedDate: daysAgo(20) },
   });
 
   // Tasks
   await prisma.task.createMany({
     data: [
-      { title: "Send executed contract to title company", priority: "urgent", status: "open", dueDate: daysFromNow(1), dealId: deals[0].id, leadId: leads[0].id, ownerId: acq.id },
-      { title: "Follow up with Linda re: appointment", priority: "high", status: "open", dueDate: daysFromNow(0), leadId: leads[1].id, dealId: deals[2].id, ownerId: acq.id },
-      { title: "Order comps for Tampa property", priority: "medium", status: "in_progress", dueDate: daysFromNow(2), dealId: deals[3].id, ownerId: acq.id },
-      { title: "Blast 2207 Pinecrest to buyers list", priority: "high", status: "open", dueDate: daysFromNow(1), dealId: deals[6].id, ownerId: dispo.id },
-      { title: "Verify proof of funds — Marcus Webb", priority: "medium", status: "open", dueDate: daysFromNow(3), ownerId: dispo.id },
-      { title: "Skip trace new KC lead list", priority: "low", status: "open", dueDate: daysFromNow(4), ownerId: acq.id },
-      { title: "Collect assignment fee — Elmwood deal", priority: "high", status: "done", completedAt: daysAgo(8), dealId: deals[5].id, ownerId: acq.id },
+      { orgId, title:"Send executed contract to title company", priority: "urgent", status: "open", dueDate: daysFromNow(1), dealId: deals[0].id, leadId: leads[0].id, ownerId: acq.id },
+      { orgId, title:"Follow up with Linda re: appointment", priority: "high", status: "open", dueDate: daysFromNow(0), leadId: leads[1].id, dealId: deals[2].id, ownerId: acq.id },
+      { orgId, title:"Order comps for Tampa property", priority: "medium", status: "in_progress", dueDate: daysFromNow(2), dealId: deals[3].id, ownerId: acq.id },
+      { orgId, title:"Blast 2207 Pinecrest to buyers list", priority: "high", status: "open", dueDate: daysFromNow(1), dealId: deals[6].id, ownerId: dispo.id },
+      { orgId, title:"Verify proof of funds — Marcus Webb", priority: "medium", status: "open", dueDate: daysFromNow(3), ownerId: dispo.id },
+      { orgId, title:"Skip trace new KC lead list", priority: "low", status: "open", dueDate: daysFromNow(4), ownerId: acq.id },
+      { orgId, title:"Collect assignment fee — Elmwood deal", priority: "high", status: "done", completedAt: daysAgo(8), dealId: deals[5].id, ownerId: acq.id },
     ],
   });
 

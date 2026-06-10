@@ -39,7 +39,10 @@ const NAV: { group: string; roles?: string[]; items: NavItem[] }[] = [
   {
     group: "Admin",
     roles: ["admin"],
-    items: [{ href: "/team", label: "Team & Access", icon: "👥" }],
+    items: [
+      { href: "/team", label: "Team & Access", icon: "👥" },
+      { href: "/settings", label: "Settings", icon: "⚙️" },
+    ],
   },
 ];
 

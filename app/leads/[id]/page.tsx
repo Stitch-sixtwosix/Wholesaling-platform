@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, Badge, Section, LinkButton } from "@/components/ui";
 import { Field, Input, Textarea, Select, SubmitButton } from "@/components/Form";
 import {
@@ -17,8 +18,9 @@ import { StatusControl } from "./StatusControl";
 export const dynamic = "force-dynamic";
 
 export default async function LeadDetailPage({ params }: { params: { id: string } }) {
-  const lead = await prisma.lead.findUnique({
-    where: { id: params.id },
+  const { orgId } = await requireUser();
+  const lead = await prisma.lead.findFirst({
+    where: { id: params.id, orgId },
     include: {
       property: true,
       deals: true,

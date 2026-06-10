@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, Badge, DataTable, EmptyState, LinkButton } from "@/components/ui";
 import {
   LEAD_STATUSES,
@@ -16,10 +17,12 @@ export default async function LeadsPage({
 }: {
   searchParams: { status?: string; q?: string };
 }) {
+  const { orgId } = await requireUser();
   const { status, q } = searchParams;
 
   const leads = await prisma.lead.findMany({
     where: {
+      orgId,
       ...(status ? { status } : {}),
       ...(q
         ? {
@@ -36,7 +39,7 @@ export default async function LeadsPage({
     orderBy: { updatedAt: "desc" },
   });
 
-  const counts = await prisma.lead.groupBy({ by: ["status"], _count: true });
+  const counts = await prisma.lead.groupBy({ by: ["status"], where: { orgId }, _count: true });
   const countFor = (s: string) => counts.find((c) => c.status === s)?._count ?? 0;
   const total = counts.reduce((sum, c) => sum + c._count, 0);
 

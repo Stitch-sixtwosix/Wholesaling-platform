@@ -5,21 +5,26 @@
 // cash-buyer prospects (fix-and-flip companies, buy-and-hold LLCs, funds).
 // It is NOT a homeowner skip-tracing service.
 //
-// Requires APOLLO_API_KEY in the environment. All calls are server-only.
+// The Apollo API key is configured per organization (Settings → Integrations)
+// and passed into each call. All calls are server-only.
 
 const APOLLO_BASE = "https://api.apollo.io/api/v1";
 
 export class ApolloError extends Error {}
 
-export function apolloConfigured(): boolean {
-  return Boolean(process.env.APOLLO_API_KEY);
+export function apolloConfigured(apiKey?: string | null): boolean {
+  return Boolean(apiKey && apiKey.trim());
 }
 
-async function apolloPost<T = any>(path: string, body: Record<string, unknown>): Promise<T> {
-  const key = process.env.APOLLO_API_KEY;
+async function apolloPost<T = any>(
+  apiKey: string | null | undefined,
+  path: string,
+  body: Record<string, unknown>
+): Promise<T> {
+  const key = apiKey?.trim();
   if (!key) {
     throw new ApolloError(
-      "Apollo is not connected. Add APOLLO_API_KEY to your environment to enable buyer discovery & enrichment."
+      "Apollo is not connected. Add your Apollo API key in Settings → Integrations to enable buyer discovery & enrichment."
     );
   }
   const res = await fetch(`${APOLLO_BASE}${path}`, {
@@ -42,7 +47,7 @@ async function apolloPost<T = any>(path: string, body: Record<string, unknown>):
       detail = await res.text().catch(() => "");
     }
     if (res.status === 401 || res.status === 403) {
-      throw new ApolloError("Apollo rejected the API key (401/403). Check APOLLO_API_KEY.");
+      throw new ApolloError("Apollo rejected the API key (401/403). Check your key in Settings → Integrations.");
     }
     if (res.status === 429) {
       throw new ApolloError("Apollo rate limit reached. Try again shortly.");
@@ -96,6 +101,7 @@ export interface ProspectSearchParams {
 }
 
 export async function searchProspects(
+  apiKey: string | null | undefined,
   params: ProspectSearchParams
 ): Promise<{ prospects: ApolloProspect[]; total: number; page: number }> {
   const body: Record<string, unknown> = {
@@ -109,7 +115,7 @@ export async function searchProspects(
   const data = await apolloPost<{
     people?: any[];
     pagination?: { total_entries?: number; page?: number };
-  }>("/mixed_people/search", body);
+  }>(apiKey, "/mixed_people/search", body);
 
   const prospects = (data.people ?? []).map(normalizePerson);
   return {
@@ -151,7 +157,10 @@ export interface EnrichParams {
   revealPersonalEmails?: boolean;
 }
 
-export async function enrichProspect(params: EnrichParams): Promise<ApolloEnrichment | null> {
+export async function enrichProspect(
+  apiKey: string | null | undefined,
+  params: EnrichParams
+): Promise<ApolloEnrichment | null> {
   const body: Record<string, unknown> = {};
   if (params.id) body.id = params.id;
   if (params.name) body.name = params.name;
@@ -162,7 +171,7 @@ export async function enrichProspect(params: EnrichParams): Promise<ApolloEnrich
   if (params.linkedinUrl) body.linkedin_url = params.linkedinUrl;
   if (params.revealPersonalEmails) body.reveal_personal_emails = true;
 
-  const data = await apolloPost<{ person?: any }>("/people/match", body);
+  const data = await apolloPost<{ person?: any }>(apiKey, "/people/match", body);
   const p = data.person;
   if (!p) return null;
 

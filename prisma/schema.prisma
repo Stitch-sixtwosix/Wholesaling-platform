@@ -1,5 +1,9 @@
 // Virtual Wholesaling Platform — data model
 // SQLite-friendly: list-type fields are stored as comma-separated strings or JSON.
+//
+// Multi-tenant: every top-level record carries an `orgId`. All reads/writes are
+// scoped to the signed-in user's organization. Child records (Comp, Activity,
+// CampaignMember) inherit scope through their parent relations.
 
 generator client {
   provider      = "prisma-client-js"
@@ -13,21 +17,54 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id           String   @id @default(cuid())
+  name         String
+  apolloApiKey String? // per-org Apollo.io API key for buyer discovery/enrichment
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users       User[]
+  invitations Invitation[]
+}
+
+model Invitation {
+  id        String       @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  email     String
+  role      String       @default("acquisitions") // acquisitions | dispositions | manager | admin
+  token     String       @unique @default(cuid())
+  accepted  Boolean      @default(false)
+  invitedBy String?
+  createdAt DateTime     @default(now())
+
+  @@index([orgId])
+}
+
+// ---------------------------------------------------------------------------
 // People & access
 // ---------------------------------------------------------------------------
 
 model User {
-  id           String   @id @default(cuid())
+  id           String       @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   name         String
-  email        String   @unique
-  role         String   @default("acquisitions") // admin | acquisitions | dispositions | manager
+  email        String       @unique
+  role         String       @default("acquisitions") // admin | acquisitions | dispositions | manager
   passwordHash String?
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
 
-  leads     Lead[]
-  deals     Deal[]
-  tasks     Task[]
+  leads Lead[]
+  deals Deal[]
+  tasks Task[]
+
+  @@index([orgId])
 }
 
 // ---------------------------------------------------------------------------
@@ -35,53 +72,56 @@ model User {
 // ---------------------------------------------------------------------------
 
 model Property {
-  id           String   @id @default(cuid())
+  id           String  @id @default(cuid())
+  orgId        String
   address      String
   city         String
   state        String
   zip          String
   county       String?
-  propertyType String   @default("single_family") // single_family | multi_family | condo | townhouse | land | mobile | commercial
+  propertyType String  @default("single_family") // single_family | multi_family | condo | townhouse | land | mobile | commercial
   beds         Int?
   baths        Float?
   sqft         Int?
   lotSizeSqft  Int?
   yearBuilt    Int?
-  condition    String   @default("unknown") // excellent | good | fair | poor | distressed | unknown
-  occupancy    String   @default("unknown") // owner | tenant | vacant | unknown
+  condition    String  @default("unknown") // excellent | good | fair | poor | distressed | unknown
+  occupancy    String  @default("unknown") // owner | tenant | vacant | unknown
 
   // Valuation
-  arv             Float? // After Repair Value
-  repairEstimate  Float?
-  estimatedValue  Float? // current as-is value / Zestimate-style
-  taxAssessed     Float?
-  annualTaxes     Float?
+  arv            Float? // After Repair Value
+  repairEstimate Float?
+  estimatedValue Float? // current as-is value / Zestimate-style
+  taxAssessed    Float?
+  annualTaxes    Float?
 
-  notes        String?
-  photosJson   String?  // JSON array of photo URLs
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  notes      String?
+  photosJson String? // JSON array of photo URLs
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  leads        Lead[]
-  deals        Deal[]
-  comps        Comp[]
+  leads Lead[]
+  deals Deal[]
+  comps Comp[]
+
+  @@index([orgId])
 }
 
 // Comparable sales used to estimate ARV
 model Comp {
-  id          String   @id @default(cuid())
-  propertyId  String
-  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  address     String
-  salePrice   Float
-  saleDate    DateTime?
-  beds        Int?
-  baths       Float?
-  sqft        Int?
-  distanceMi  Float?
-  notes       String?
-  createdAt   DateTime @default(now())
+  address    String
+  salePrice  Float
+  saleDate   DateTime?
+  beds       Int?
+  baths      Float?
+  sqft       Int?
+  distanceMi Float?
+  notes      String?
+  createdAt  DateTime @default(now())
 }
 
 // ---------------------------------------------------------------------------
@@ -89,35 +129,38 @@ model Comp {
 // ---------------------------------------------------------------------------
 
 model Lead {
-  id          String   @id @default(cuid())
-  firstName   String
-  lastName    String?
-  email       String?
-  phone       String?
-  altPhone    String?
+  id        String  @id @default(cuid())
+  orgId     String
+  firstName String
+  lastName  String?
+  email     String?
+  phone     String?
+  altPhone  String?
 
   // Lead lifecycle
-  status      String   @default("new") // new | contacted | qualified | appointment | offer_made | under_contract | dead | nurture
-  source      String   @default("other") // ppc | seo | direct_mail | cold_call | sms | driving_for_dollars | referral | list | bandit_sign | other
-  motivation  String?  // foreclosure | divorce | inherited | tired_landlord | relocation | financial | repairs | vacant | other
-  temperature String   @default("warm") // hot | warm | cold
+  status      String  @default("new") // new | contacted | qualified | appointment | offer_made | under_contract | dead | nurture
+  source      String  @default("other") // ppc | seo | direct_mail | cold_call | sms | driving_for_dollars | referral | list | bandit_sign | other
+  motivation  String? // foreclosure | divorce | inherited | tired_landlord | relocation | financial | repairs | vacant | other
+  temperature String  @default("warm") // hot | warm | cold
   askingPrice Float?
   notes       String?
 
-  propertyId  String?
-  property    Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 
-  ownerId     String?
-  owner       User?     @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   lastContact DateTime?
 
-  deals       Deal[]
-  activities  Activity[]
-  tasks       Task[]
+  deals           Deal[]
+  activities      Activity[]
+  tasks           Task[]
   campaignMembers CampaignMember[]
+
+  @@index([orgId])
 }
 
 // ---------------------------------------------------------------------------
@@ -125,10 +168,11 @@ model Lead {
 // ---------------------------------------------------------------------------
 
 model Deal {
-  id          String   @id @default(cuid())
-  title       String
-  stage       String   @default("lead") // lead | contacted | appointment | offer | under_contract | assigned | closed | dead
-  status      String   @default("active") // active | won | lost
+  id     String @id @default(cuid())
+  orgId  String
+  title  String
+  stage  String @default("lead") // lead | contacted | appointment | offer | under_contract | assigned | closed | dead
+  status String @default("active") // active | won | lost
 
   // Economics
   arv            Float?
@@ -141,25 +185,27 @@ model Deal {
   expectedCloseDate DateTime?
   closedDate        DateTime?
 
-  leadId      String?
-  lead        Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
-  propertyId  String?
-  property    Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 
-  buyerId     String?
-  buyer       Buyer?    @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  buyerId String?
+  buyer   Buyer?  @relation(fields: [buyerId], references: [id], onDelete: SetNull)
 
-  ownerId     String?
-  owner       User?     @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
 
-  notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  activities  Activity[]
-  tasks       Task[]
-  contracts   Contract[]
+  activities Activity[]
+  tasks      Task[]
+  contracts  Contract[]
+
+  @@index([orgId])
 }
 
 // ---------------------------------------------------------------------------
@@ -167,33 +213,36 @@ model Deal {
 // ---------------------------------------------------------------------------
 
 model Buyer {
-  id            String   @id @default(cuid())
-  firstName     String
-  lastName      String?
-  company       String?
-  email         String?
-  phone         String?
+  id        String  @id @default(cuid())
+  orgId     String
+  firstName String
+  lastName  String?
+  company   String?
+  email     String?
+  phone     String?
 
-  buyerType     String   @default("flipper") // flipper | landlord | wholesaler | owner_occupant | hedge_fund | other
-  status        String   @default("active") // active | inactive | vip
-  proofOfFunds  Boolean  @default(false)
-  cashBuyer     Boolean  @default(true)
+  buyerType    String  @default("flipper") // flipper | landlord | wholesaler | owner_occupant | hedge_fund | other
+  status       String  @default("active") // active | inactive | vip
+  proofOfFunds Boolean @default(false)
+  cashBuyer    Boolean @default(true)
 
   // Buy box (criteria)
-  markets       String?  // comma separated cities/zips/counties
-  propertyTypes String?  // comma separated
+  markets       String? // comma separated cities/zips/counties
+  propertyTypes String? // comma separated
   minPrice      Float?
   maxPrice      Float?
   minBeds       Int?
   maxRehab      Float?
   notes         String?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  deals         Deal[]
-  activities    Activity[]
+  deals           Deal[]
+  activities      Activity[]
   campaignMembers CampaignMember[]
+
+  @@index([orgId])
 }
 
 // ---------------------------------------------------------------------------
@@ -201,16 +250,17 @@ model Buyer {
 // ---------------------------------------------------------------------------
 
 model Contract {
-  id          String   @id @default(cuid())
-  type        String   @default("purchase") // purchase | assignment | jv | option
-  title       String
-  status      String   @default("draft") // draft | sent | signed | executed | cancelled
+  id     String @id @default(cuid())
+  orgId  String
+  type   String @default("purchase") // purchase | assignment | jv | option
+  title  String
+  status String @default("draft") // draft | sent | signed | executed | cancelled
 
-  dealId      String?
-  deal        Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
 
-  buyerName   String?
-  sellerName  String?
+  buyerName       String?
+  sellerName      String?
   propertyAddress String?
   purchasePrice   Float?
   assignmentFee   Float?
@@ -218,11 +268,13 @@ model Contract {
   closingDate     DateTime?
   inspectionDays  Int?
 
-  body        String?  // generated contract text
-  sentDate    DateTime?
-  signedDate  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  body       String? // generated contract text
+  sentDate   DateTime?
+  signedDate DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([orgId])
 }
 
 // ---------------------------------------------------------------------------
@@ -230,54 +282,60 @@ model Contract {
 // ---------------------------------------------------------------------------
 
 model Campaign {
-  id          String   @id @default(cuid())
-  name        String
-  channel     String   @default("sms") // sms | email | direct_mail | cold_call | rvm | ppc
-  status      String   @default("draft") // draft | active | paused | completed
-  audience    String?  // description of the list targeted
+  id       String  @id @default(cuid())
+  orgId    String
+  name     String
+  channel  String  @default("sms") // sms | email | direct_mail | cold_call | rvm | ppc
+  status   String  @default("draft") // draft | active | paused | completed
+  audience String? // description of the list targeted
 
   // Performance
-  sent        Int      @default(0)
-  delivered   Int      @default(0)
-  responses   Int      @default(0)
-  leads       Int      @default(0)
-  cost        Float    @default(0)
+  sent      Int   @default(0)
+  delivered Int   @default(0)
+  responses Int   @default(0)
+  leads     Int   @default(0)
+  cost      Float @default(0)
 
-  templateId  String?
-  template    Template? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateId String?
+  template   Template? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
-  startDate   DateTime?
-  endDate     DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  members     CampaignMember[]
+  members CampaignMember[]
+
+  @@index([orgId])
 }
 
 model CampaignMember {
-  id          String   @id @default(cuid())
-  campaignId  String
-  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
-  leadId      String?
-  lead        Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  buyerId     String?
-  buyer       Buyer?   @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  leadId  String?
+  lead    Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  buyerId String?
+  buyer   Buyer?  @relation(fields: [buyerId], references: [id], onDelete: SetNull)
 
-  status      String   @default("queued") // queued | sent | delivered | responded | bounced | opted_out
-  createdAt   DateTime @default(now())
+  status    String   @default("queued") // queued | sent | delivered | responded | bounced | opted_out
+  createdAt DateTime @default(now())
 }
 
 model Template {
-  id          String   @id @default(cuid())
-  name        String
-  channel     String   @default("sms") // sms | email | direct_mail | contract
-  subject     String?
-  body        String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  channel   String   @default("sms") // sms | email | direct_mail | contract
+  subject   String?
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  campaigns   Campaign[]
+  campaigns Campaign[]
+
+  @@index([orgId])
 }
 
 // ---------------------------------------------------------------------------
@@ -285,36 +343,39 @@ model Template {
 // ---------------------------------------------------------------------------
 
 model Task {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
+  orgId       String
   title       String
   description String?
-  status      String   @default("open") // open | in_progress | done
-  priority    String   @default("medium") // low | medium | high | urgent
+  status      String    @default("open") // open | in_progress | done
+  priority    String    @default("medium") // low | medium | high | urgent
   dueDate     DateTime?
   completedAt DateTime?
 
-  leadId      String?
-  lead        Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  dealId      String?
-  deal        Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
-  ownerId     String?
-  owner       User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
 }
 
 model Activity {
-  id          String   @id @default(cuid())
-  type        String   @default("note") // note | call | sms | email | meeting | status_change | offer | system
-  body        String
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  type      String   @default("note") // note | call | sms | email | meeting | status_change | offer | system
+  body      String
+  createdAt DateTime @default(now())
 
-  leadId      String?
-  lead        Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  dealId      String?
-  deal        Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  buyerId     String?
-  buyer       Buyer?   @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  buyerId String?
+  buyer   Buyer?  @relation(fields: [buyerId], references: [id], onDelete: Cascade)
 }

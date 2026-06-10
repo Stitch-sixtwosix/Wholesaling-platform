@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, Badge, Section, LinkButton } from "@/components/ui";
 import { Field, Input, Textarea, Select, SubmitButton } from "@/components/Form";
 import {
@@ -23,8 +24,9 @@ function toDateInput(value: Date | null | undefined): string {
 }
 
 export default async function DealDetailPage({ params }: { params: { id: string } }) {
-  const deal = await prisma.deal.findUnique({
-    where: { id: params.id },
+  const { orgId } = await requireUser();
+  const deal = await prisma.deal.findFirst({
+    where: { id: params.id, orgId },
     include: {
       lead: true,
       property: true,
@@ -36,7 +38,7 @@ export default async function DealDetailPage({ params }: { params: { id: string 
   });
   if (!deal) notFound();
 
-  const buyers = await prisma.buyer.findMany({ orderBy: { updatedAt: "desc" } });
+  const buyers = await prisma.buyer.findMany({ where: { orgId }, orderBy: { updatedAt: "desc" } });
   const buyerOptions = buyers.map((b) => ({
     id: b.id,
     label: b.company || fullName(b.firstName, b.lastName) || "Unnamed buyer",

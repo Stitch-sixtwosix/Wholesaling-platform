@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { PageHeader, StatCard, Section, Badge } from "@/components/ui";
 import { DEAL_STAGES, LEAD_STATUSES, ACTIVITY_TYPES, labelOf } from "@/lib/constants";
 import { currency, fullName, relativeTime } from "@/lib/format";
@@ -12,6 +13,7 @@ export default async function DashboardPage({
 }: {
   searchParams: { denied?: string };
 }) {
+  const { orgId } = await requireUser();
   const denied = searchParams?.denied;
   const [
     leadCount,
@@ -24,20 +26,21 @@ export default async function DashboardPage({
     recentLeads,
     recentActivities,
   ] = await Promise.all([
-    prisma.lead.count(),
-    prisma.lead.count({ where: { status: { notIn: ["dead", "nurture"] } } }),
-    prisma.deal.findMany(),
-    prisma.deal.findMany({ where: { status: "won" } }),
-    prisma.buyer.count({ where: { status: { not: "inactive" } } }),
-    prisma.campaign.count({ where: { status: "active" } }),
+    prisma.lead.count({ where: { orgId } }),
+    prisma.lead.count({ where: { orgId, status: { notIn: ["dead", "nurture"] } } }),
+    prisma.deal.findMany({ where: { orgId } }),
+    prisma.deal.findMany({ where: { orgId, status: "won" } }),
+    prisma.buyer.count({ where: { orgId, status: { not: "inactive" } } }),
+    prisma.campaign.count({ where: { orgId, status: "active" } }),
     prisma.task.findMany({
-      where: { status: { not: "done" } },
+      where: { orgId, status: { not: "done" } },
       orderBy: { dueDate: "asc" },
       take: 6,
       include: { lead: true, deal: true },
     }),
-    prisma.lead.findMany({ orderBy: { createdAt: "desc" }, take: 5, include: { property: true } }),
+    prisma.lead.findMany({ where: { orgId }, orderBy: { createdAt: "desc" }, take: 5, include: { property: true } }),
     prisma.activity.findMany({
+      where: { OR: [{ lead: { orgId } }, { deal: { orgId } }, { buyer: { orgId } }] },
       orderBy: { createdAt: "desc" },
       take: 8,
       include: { lead: true, deal: true, buyer: true },
