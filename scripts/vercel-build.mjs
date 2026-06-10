@@ -10,7 +10,16 @@
 //     data, but per-instance and ephemeral — user-created data does NOT persist.
 import { execSync } from "node:child_process";
 
-const url = process.env.DATABASE_URL || "";
+// Discover a Postgres URL from any env var (Neon's Vercel integration may use a
+// custom prefix like DATABASE_URL / STORAGE_URL / POSTGRES_URL), so the build
+// mode matches what lib/db resolves at runtime.
+const allPg = Object.values(process.env).filter(
+  (v) => v && /^postgres(ql)?:\/\//.test(v)
+);
+const url =
+  (process.env.DATABASE_URL && /^postgres/.test(process.env.DATABASE_URL)
+    ? process.env.DATABASE_URL
+    : allPg.find((u) => u.includes("-pooler.")) || allPg[0]) || "";
 const isPostgres = /^postgres(ql)?:\/\//.test(url);
 
 function run(cmd, env) {
@@ -18,11 +27,14 @@ function run(cmd, env) {
 }
 
 if (isPostgres) {
-  console.log("vercel-build: PostgreSQL DATABASE_URL detected — persistent mode.");
+  console.log("vercel-build: PostgreSQL detected — persistent mode.");
   // Schema changes (db push) need a DIRECT connection, not the PgBouncer pool.
-  // Neon's Vercel integration exposes the unpooled URL; fall back to DATABASE_URL.
+  // Prefer an explicit unpooled URL; otherwise derive it by dropping "-pooler".
   const directUrl =
-    process.env.DATABASE_URL_UNPOOLED || process.env.POSTGRES_URL_NON_POOLING || url;
+    process.env.DATABASE_URL_UNPOOLED ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    allPg.find((u) => !u.includes("-pooler.")) ||
+    url.replace("-pooler.", ".");
   run("node scripts/prod-schema.mjs");
   run("prisma generate --schema prisma/schema.prod.prisma");
   run("prisma db push --schema prisma/schema.prod.prisma --skip-generate --accept-data-loss", {
