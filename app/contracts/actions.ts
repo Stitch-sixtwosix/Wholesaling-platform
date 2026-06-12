@@ -140,6 +140,74 @@ export async function updateContract(formData: FormData) {
   revalidatePath(`/contracts/${id}`);
 }
 
+// Email the contract to the property owner/seller. Uses the organization's
+// Resend key (Settings → Integrations). Without one, the send is logged in the
+// deal timeline and the contract is still marked Sent, so the flow keeps moving.
+export async function sendContractToOwner(formData: FormData) {
+  const { orgId, name } = await requireUser();
+  const contractId = str(formData.get("contractId"));
+  const to = str(formData.get("to"));
+  if (!contractId) throw new Error("Contract id is required");
+  if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    throw new Error("A valid recipient email is required");
+  }
+
+  const contract = await prisma.contract.findFirst({
+    where: { id: contractId, orgId },
+    include: { deal: true },
+  });
+  if (!contract) throw new Error("Contract not found");
+
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { name: true, resendApiKey: true, fromEmail: true },
+  });
+
+  let delivery: string;
+  if (org?.resendApiKey && org.fromEmail) {
+    const { sendEmail } = await import("@/lib/email");
+    await sendEmail({
+      apiKey: org.resendApiKey,
+      from: org.fromEmail,
+      to,
+      subject: `${contract.title} — for your review`,
+      text:
+        `Hello,\n\nPlease find the contract for ${contract.propertyAddress ?? "the property"} below.\n` +
+        `Reply to this email with any questions.\n\n` +
+        `------------------------------------------------------------\n\n` +
+        `${contract.body ?? "(contract body not generated)"}\n\n` +
+        `------------------------------------------------------------\n` +
+        `Sent by ${name} · ${org.name}`,
+    });
+    delivery = `Contract emailed to ${to}.`;
+  } else {
+    delivery = `Contract marked sent to ${to} (no email service connected — add a Resend key in Settings to actually deliver it).`;
+  }
+
+  await prisma.contract.update({
+    where: { id: contract.id },
+    data: { status: "sent", sentDate: contract.sentDate ?? new Date() },
+  });
+
+  if (contract.dealId) {
+    await prisma.activity.create({
+      data: { type: "email", body: delivery, dealId: contract.dealId },
+    });
+    // Sending a contract means we're at least at the offer stage.
+    if (contract.deal && ["lead", "contacted", "appointment"].includes(contract.deal.stage)) {
+      await prisma.deal.update({
+        where: { id: contract.dealId },
+        data: { stage: "offer", status: "active" },
+      });
+    }
+  }
+
+  revalidatePath("/contracts");
+  revalidatePath(`/contracts/${contract.id}`);
+  if (contract.dealId) revalidatePath(`/pipeline/${contract.dealId}`);
+  redirect(`/contracts/${contract.id}?sent=${encodeURIComponent(to)}`);
+}
+
 export async function updateContractStatus(contractId: string, status: string) {
   const { orgId } = await requireUser();
   const existing = await prisma.contract.findFirst({ where: { id: contractId, orgId } });

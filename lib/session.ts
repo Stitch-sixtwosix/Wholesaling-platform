@@ -90,7 +90,7 @@ export type Role = "admin" | "acquisitions" | "dispositions" | "manager";
 
 // Top-level route prefixes each role may access. Admin & manager see everything.
 const ROLE_ROUTES: Record<string, string[]> = {
-  acquisitions: ["/", "/leads", "/pipeline", "/properties", "/analyzer", "/tasks", "/contracts"],
+  acquisitions: ["/", "/leads", "/pipeline", "/properties", "/analyzer", "/deal-finder", "/tasks", "/contracts"],
   dispositions: ["/", "/buyers", "/dispositions", "/marketing", "/contracts", "/tasks", "/pipeline"],
 };
 

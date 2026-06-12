@@ -24,6 +24,8 @@ model Organization {
   id           String   @id @default(cuid())
   name         String
   apolloApiKey String? // per-org Apollo.io API key for buyer discovery/enrichment
+  resendApiKey String? // per-org Resend API key for sending contracts/emails
+  fromEmail    String? // verified sender address for outbound email
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -122,6 +124,39 @@ model Comp {
   distanceMi Float?
   notes      String?
   createdAt  DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Deal Finder — on-market listings watched for stale/motivated opportunities
+// ---------------------------------------------------------------------------
+
+model Listing {
+  id           String   @id @default(cuid())
+  orgId        String
+  address      String
+  city         String
+  state        String
+  zip          String
+  source       String   @default("manual") // manual | zillow | redfin | mls | csv | other
+  url          String? // link to the original listing
+  listPrice    Float
+  listDate     DateTime // when it hit the market (drives days-on-market)
+  beds         Int?
+  baths        Float?
+  sqft         Int?
+  propertyType String   @default("single_family")
+
+  // Optional valuation inputs for a sharper suggested offer
+  arv            Float?
+  repairEstimate Float?
+
+  status    String  @default("watching") // watching | converted | dismissed
+  leadId    String? // set when converted into a lead/deal
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
 }
 
 // ---------------------------------------------------------------------------

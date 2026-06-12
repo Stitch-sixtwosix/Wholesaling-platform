@@ -252,6 +252,17 @@ async function main() {
     ],
   });
 
+  // Deal Finder listings (stale on-market opportunities)
+  await prisma.listing.createMany({
+    data: [
+      { orgId, address: "1408 Faxon Ave", city: "Memphis", state: "TN", zip: "38104", listPrice: 159900, listDate: daysAgo(142), beds: 3, baths: 1, sqft: 1300, source: "csv", arv: 210000, repairEstimate: 35000 },
+      { orgId, address: "77 Garfield Pl", city: "Cleveland", state: "OH", zip: "44108", listPrice: 99500, listDate: daysAgo(97), beds: 4, baths: 2, sqft: 1750, source: "csv" },
+      { orgId, address: "5212 Trouble Creek Rd", city: "Tampa", state: "FL", zip: "33611", listPrice: 285000, listDate: daysAgo(201), beds: 3, baths: 2, sqft: 1420, source: "manual", arv: 320000, repairEstimate: 30000 },
+      { orgId, address: "918 N Euclid Ave", city: "Indianapolis", state: "IN", zip: "46201", listPrice: 124900, listDate: daysAgo(66), beds: 2, baths: 1, sqft: 980, source: "manual" },
+      { orgId, address: "2203 Avenue J", city: "Birmingham", state: "AL", zip: "35218", listPrice: 89900, listDate: daysAgo(34), beds: 3, baths: 1, sqft: 1150, source: "csv" },
+    ],
+  });
+
   console.log("Seed complete:");
   console.log(`  ${await prisma.user.count()} users`);
   console.log(`  ${await prisma.property.count()} properties`);

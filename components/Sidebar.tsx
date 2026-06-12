@@ -18,6 +18,7 @@ const NAV: { group: string; roles?: string[]; items: NavItem[] }[] = [
       { href: "/pipeline", label: "Deal Pipeline", icon: "🗂️" },
       { href: "/properties", label: "Properties", icon: "🏠" },
       { href: "/analyzer", label: "Deal Analyzer", icon: "🧮" },
+      { href: "/deal-finder", label: "Deal Finder", icon: "🔍" },
     ],
   },
   {

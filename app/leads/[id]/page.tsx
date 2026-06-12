@@ -23,7 +23,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
     where: { id: params.id, orgId },
     include: {
       property: true,
-      deals: true,
+      deals: { include: { contracts: { orderBy: { updatedAt: "desc" } } } },
       activities: { orderBy: { createdAt: "desc" } },
       tasks: { orderBy: { dueDate: "asc" } },
     },
@@ -31,6 +31,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
   if (!lead) notFound();
 
   const convert = convertLeadToDeal.bind(null, lead.id);
+  const documents = lead.deals.flatMap((d) => d.contracts);
 
   return (
     <div>
@@ -102,6 +103,40 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
                 <Info label="Repairs">{currency(lead.property.repairEstimate)}</Info>
                 <Info label="Condition">{lead.property.condition}</Info>
               </div>
+            </Section>
+          )}
+
+          {/* Documents (contracts on this client's deals) */}
+          {documents.length > 0 && (
+            <Section title="Documents & Contracts">
+              <ul className="divide-y divide-slate-100">
+                {documents.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                    <div className="min-w-[180px] flex-1">
+                      <Link
+                        href={`/contracts/${c.id}`}
+                        className="text-sm font-medium text-brand-700 hover:underline"
+                      >
+                        📄 {c.title}
+                      </Link>
+                      <div className="text-xs text-slate-400">
+                        {c.sentDate ? `Sent ${relativeTime(c.sentDate)}` : "Not sent yet"}
+                        {c.signedDate && ` · Signed ${relativeTime(c.signedDate)}`}
+                      </div>
+                    </div>
+                    <Badge
+                      options={[
+                        { value: "draft", label: "Draft", color: "bg-slate-100 text-slate-500" },
+                        { value: "sent", label: "Sent", color: "bg-blue-100 text-blue-700" },
+                        { value: "signed", label: "Signed", color: "bg-emerald-100 text-emerald-700" },
+                        { value: "executed", label: "Executed", color: "bg-emerald-100 text-emerald-700" },
+                        { value: "cancelled", label: "Cancelled", color: "bg-rose-100 text-rose-600" },
+                      ]}
+                      value={c.status}
+                    />
+                  </li>
+                ))}
+              </ul>
             </Section>
           )}
 

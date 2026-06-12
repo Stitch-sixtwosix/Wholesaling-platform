@@ -34,6 +34,31 @@ export async function saveApolloKey(formData: FormData) {
   revalidatePath("/buyers/discover");
 }
 
+export async function saveEmailSettings(formData: FormData) {
+  const { orgId } = await requireAdmin();
+  const apiKey = ((formData.get("resendApiKey") as string) || "").trim();
+  const fromEmail = ((formData.get("fromEmail") as string) || "").trim();
+  if (!apiKey || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(fromEmail)) {
+    throw new Error("A Resend API key and a valid from-address are required.");
+  }
+  const res = await prisma.organization.updateMany({
+    where: { id: orgId },
+    data: { resendApiKey: apiKey, fromEmail },
+  });
+  if (res.count === 0) throw new Error(NEEDS_DB);
+  revalidatePath("/settings");
+  revalidatePath("/contracts");
+}
+
+export async function disconnectEmail() {
+  const { orgId } = await requireAdmin();
+  await prisma.organization.updateMany({
+    where: { id: orgId },
+    data: { resendApiKey: null, fromEmail: null },
+  });
+  revalidatePath("/settings");
+}
+
 export async function disconnectApollo() {
   const { orgId } = await requireAdmin();
   await prisma.organization.updateMany({ where: { id: orgId }, data: { apolloApiKey: null } });

@@ -6,7 +6,7 @@ import { PageHeader, Badge, Section, LinkButton } from "@/components/ui";
 import { Field, Input, Textarea, Select, SubmitButton } from "@/components/Form";
 import { CONTRACT_TYPES, CONTRACT_STATUSES, labelOf } from "@/lib/constants";
 import { currency, date, dateTime } from "@/lib/format";
-import { updateContract, deleteContract } from "../actions";
+import { updateContract, deleteContract, sendContractToOwner } from "../actions";
 import { StatusControl } from "./StatusControl";
 import { PrintButton } from "./PrintButton";
 
@@ -20,13 +20,26 @@ function dateInput(value: Date | string | null | undefined): string {
   return d.toISOString().slice(0, 10);
 }
 
-export default async function ContractDetailPage({ params }: { params: { id: string } }) {
+export default async function ContractDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { sent?: string };
+}) {
   const { orgId } = await requireUser();
   const contract = await prisma.contract.findFirst({
     where: { id: params.id, orgId },
-    include: { deal: true },
+    include: { deal: { include: { lead: true } } },
   });
   if (!contract) notFound();
+
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { resendApiKey: true, fromEmail: true },
+  });
+  const emailReady = Boolean(org?.resendApiKey && org?.fromEmail);
+  const ownerEmail = contract.deal?.lead?.email ?? "";
 
   const del = deleteContract.bind(null, contract.id);
 
@@ -46,6 +59,14 @@ export default async function ContractDetailPage({ params }: { params: { id: str
       <p className="mb-4 text-xs text-slate-400">
         Educational template — not legal advice. Consult a licensed attorney before use.
       </p>
+
+      {searchParams.sent && (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {emailReady
+            ? `Contract emailed to ${searchParams.sent} and marked as Sent.`
+            : `Contract marked as Sent to ${searchParams.sent}. Connect an email service in Settings to actually deliver it.`}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Main: document */}
@@ -90,6 +111,42 @@ export default async function ContractDetailPage({ params }: { params: { id: str
 
         {/* Right: details + edit */}
         <div className="space-y-6">
+          <Section title="Send to Owner">
+            <form action={sendContractToOwner} className="space-y-3 p-5">
+              <input type="hidden" name="contractId" value={contract.id} />
+              <Field
+                label="Owner / Seller Email"
+                hint={
+                  ownerEmail
+                    ? "Pre-filled from the linked lead."
+                    : "No email on the linked lead — enter one."
+                }
+              >
+                <Input
+                  name="to"
+                  type="email"
+                  required
+                  defaultValue={ownerEmail}
+                  placeholder="owner@email.com"
+                />
+              </Field>
+              <SubmitButton className="w-full">
+                {emailReady ? "📤 Email Contract to Owner" : "Mark as Sent to Owner"}
+              </SubmitButton>
+              {!emailReady && (
+                <p className="text-xs text-amber-600">
+                  No email service connected — this will log the send and mark the contract Sent.
+                  Add a Resend key in <Link href="/settings" className="underline">Settings</Link> to
+                  deliver real email.
+                </p>
+              )}
+              <p className="text-xs text-slate-400">
+                Sending marks the contract <strong>Sent</strong>, logs it on the deal timeline, and
+                moves the deal to the Offer stage if it isn't there yet.
+              </p>
+            </form>
+          </Section>
+
           <Section title="Details">
             <div className="grid grid-cols-2 gap-x-6 gap-y-4 p-5">
               <Info label="Status">

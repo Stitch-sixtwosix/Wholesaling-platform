@@ -82,6 +82,76 @@ export function estimateRehab(sqft: number, tier: string): number {
   return Math.round(sqft * t.perSqft);
 }
 
+// ---------------------------------------------------------------------------
+// Deal Finder — stale-listing analysis
+// ---------------------------------------------------------------------------
+
+export function daysOnMarket(listDate: Date | string): number {
+  const start = new Date(listDate).getTime();
+  return Math.max(0, Math.floor((Date.now() - start) / 86_400_000));
+}
+
+// Seller-motivation discount tiers by days on market. The longer a listing
+// sits, the more negotiating room — these are starting-offer heuristics.
+export const DOM_TIERS = [
+  { minDays: 180, discount: 0.2, label: "180+ days — very stale" },
+  { minDays: 120, discount: 0.15, label: "120+ days — stale" },
+  { minDays: 90, discount: 0.1, label: "90+ days — aging" },
+  { minDays: 60, discount: 0.05, label: "60+ days — watch" },
+  { minDays: 0, discount: 0, label: "fresh" },
+] as const;
+
+export interface SuggestedOffer {
+  suggested: number;
+  discountPct: number; // motivation discount applied to list price
+  dom: number;
+  basis: "mao" | "discounted_list"; // which method produced the number
+  isStale: boolean; // 60+ days on market
+}
+
+/**
+ * Suggested contract price for an on-market listing.
+ *
+ * 1. Discount the list price by a motivation tier based on days on market.
+ * 2. If ARV + repairs are known, also compute the seller MAO (70% rule less a
+ *    $10k assignment fee) and take the LOWER of the two — never offer above
+ *    what the deal math supports.
+ */
+export function suggestContractPrice(listing: {
+  listPrice: number;
+  listDate: Date | string;
+  arv?: number | null;
+  repairEstimate?: number | null;
+}): SuggestedOffer {
+  const dom = daysOnMarket(listing.listDate);
+  const tier = DOM_TIERS.find((t) => dom >= t.minDays) ?? DOM_TIERS[DOM_TIERS.length - 1];
+  const discountedList = listing.listPrice * (1 - tier.discount);
+
+  let suggested = discountedList;
+  let basis: SuggestedOffer["basis"] = "discounted_list";
+
+  if (listing.arv && listing.arv > 0) {
+    const { sellerMao } = analyzeDeal({
+      arv: listing.arv,
+      repairEstimate: listing.repairEstimate ?? 0,
+      desiredAssignmentFee: 10_000,
+      rule: 0.7,
+    });
+    if (sellerMao > 0 && sellerMao < suggested) {
+      suggested = sellerMao;
+      basis = "mao";
+    }
+  }
+
+  return {
+    suggested: Math.round(suggested),
+    discountPct: tier.discount * 100,
+    dom,
+    basis,
+    isStale: dom >= 60,
+  };
+}
+
 /** Score how well a deal matches a buyer's buy box (0-100). */
 export function buyerMatchScore(
   deal: { price: number; propertyType?: string | null; market?: string | null; rehab?: number | null; beds?: number | null },
