@@ -6,9 +6,11 @@ import { Field, Input, Textarea, Select, SubmitButton } from "@/components/Form"
 import { PROPERTY_TYPES } from "@/lib/constants";
 import { currency } from "@/lib/format";
 import { suggestContractPrice, DOM_TIERS } from "@/lib/analyzer";
+import { rentcastConfigured } from "@/lib/rentcast";
 import {
   createListing,
   importListingsCsv,
+  pullFromRentcast,
   convertListing,
   dismissListing,
   restoreListing,
@@ -34,11 +36,17 @@ function domBadge(dom: number) {
 export default async function DealFinderPage({
   searchParams,
 }: {
-  searchParams: { show?: string; minDom?: string; imported?: string };
+  searchParams: { show?: string; minDom?: string; imported?: string; pullError?: string };
 }) {
   const { orgId } = await requireUser();
   const show = searchParams.show ?? "watching";
   const minDom = Math.max(0, Number(searchParams.minDom) || 0);
+
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { rentcastApiKey: true },
+  });
+  const rentcastReady = rentcastConfigured(org?.rentcastApiKey);
 
   const listings = await prisma.listing.findMany({
     where: { orgId, ...(show === "all" ? {} : { status: show }) },
@@ -71,6 +79,44 @@ export default async function DealFinderPage({
           Imported {searchParams.imported} listing{searchParams.imported === "1" ? "" : "s"}.
         </div>
       )}
+      {searchParams.pullError && (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {searchParams.pullError}
+        </div>
+      )}
+
+      {/* Automated pull (RentCast free tier) */}
+      <Section title="🔄 Pull Listings Automatically (RentCast)" className="mb-6">
+        {rentcastReady ? (
+          <form action={pullFromRentcast} className="flex flex-wrap items-end gap-3 p-5">
+            <Field label="City" className="min-w-[160px] flex-1">
+              <Input name="city" placeholder="Memphis" />
+            </Field>
+            <Field label="State" className="w-24">
+              <Input name="state" placeholder="TN" />
+            </Field>
+            <span className="pb-2 text-xs text-slate-400">or</span>
+            <Field label="Zip code" className="w-32">
+              <Input name="zip" placeholder="38109" />
+            </Field>
+            <SubmitButton>Pull Active Listings</SubmitButton>
+            <p className="w-full text-xs text-slate-400">
+              Pulls up to 50 active on-market listings with days-on-market. Free tier allows ~50
+              lookups/month.
+            </p>
+          </form>
+        ) : (
+          <div className="p-5 text-sm text-slate-500">
+            Connect a free <strong>RentCast</strong> API key in{" "}
+            <Link href="/settings" className="text-brand-600 hover:underline">
+              Settings → Integrations
+            </Link>{" "}
+            to pull listings automatically by city or zip. Get a key free at{" "}
+            <span className="font-medium text-slate-600">rentcast.io</span>. Meanwhile, you can add
+            listings or import a Redfin CSV below.
+          </div>
+        )}
+      </Section>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Watching" value={String(watching)} />

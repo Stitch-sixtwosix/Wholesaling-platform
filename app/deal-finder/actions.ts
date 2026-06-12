@@ -199,6 +199,67 @@ export async function importListingsCsv(formData: FormData) {
   redirect(`/deal-finder?imported=${imported}`);
 }
 
+// Pull active on-market listings from RentCast (free tier) by city/state or zip
+// and import any new ones into the Deal Finder.
+export async function pullFromRentcast(formData: FormData) {
+  const { orgId } = await requireUser();
+  const city = str(formData.get("city"));
+  const state = str(formData.get("state"));
+  const zipCode = str(formData.get("zip"));
+
+  if (!zipCode && !(city && state)) {
+    redirect(`/deal-finder?pullError=${encodeURIComponent("Enter a zip code, or both a city and state.")}`);
+  }
+
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { rentcastApiKey: true },
+  });
+  if (!org?.rentcastApiKey) {
+    redirect(`/deal-finder?pullError=${encodeURIComponent("Connect a RentCast API key in Settings → Integrations first.")}`);
+  }
+
+  const { fetchSaleListings, RentcastError } = await import("@/lib/rentcast");
+  let listings;
+  try {
+    listings = await fetchSaleListings(org!.rentcastApiKey!, { city, state, zipCode, limit: 50 });
+  } catch (e) {
+    const msg = e instanceof RentcastError ? e.message : "RentCast request failed.";
+    redirect(`/deal-finder?pullError=${encodeURIComponent(msg)}`);
+  }
+
+  let imported = 0;
+  for (const l of listings!) {
+    const dupe = await prisma.listing.findFirst({ where: { orgId, address: l.address } });
+    if (dupe) continue;
+    const listDate =
+      l.listedDate && !Number.isNaN(new Date(l.listedDate).getTime())
+        ? new Date(l.listedDate)
+        : new Date(Date.now() - l.daysOnMarket * 86_400_000);
+    await prisma.listing.create({
+      data: {
+        orgId,
+        address: l.address,
+        city: l.city,
+        state: l.state,
+        zip: l.zip,
+        source: "rentcast",
+        url: l.url ?? undefined,
+        listPrice: l.price,
+        listDate,
+        beds: l.beds ?? undefined,
+        baths: l.baths ?? undefined,
+        sqft: l.sqft ?? undefined,
+        propertyType: l.propertyType,
+      },
+    });
+    imported++;
+  }
+
+  revalidatePath("/deal-finder");
+  redirect(`/deal-finder?imported=${imported}`);
+}
+
 // Convert a stale listing into a Property + Lead + Deal pre-filled with the
 // suggested contract price, ready to work in the pipeline.
 export async function convertListing(listingId: string) {

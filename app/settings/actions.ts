@@ -59,6 +59,26 @@ export async function disconnectEmail() {
   revalidatePath("/settings");
 }
 
+export async function saveRentcastKey(formData: FormData) {
+  const { orgId } = await requireAdmin();
+  const apiKey = ((formData.get("rentcastApiKey") as string) || "").trim();
+  if (!apiKey) throw new Error("A RentCast API key is required.");
+  const res = await prisma.organization.updateMany({
+    where: { id: orgId },
+    data: { rentcastApiKey: apiKey },
+  });
+  if (res.count === 0) throw new Error(NEEDS_DB);
+  revalidatePath("/settings");
+  revalidatePath("/deal-finder");
+}
+
+export async function disconnectRentcast() {
+  const { orgId } = await requireAdmin();
+  await prisma.organization.updateMany({ where: { id: orgId }, data: { rentcastApiKey: null } });
+  revalidatePath("/settings");
+  revalidatePath("/deal-finder");
+}
+
 export async function disconnectApollo() {
   const { orgId } = await requireAdmin();
   await prisma.organization.updateMany({ where: { id: orgId }, data: { apolloApiKey: null } });

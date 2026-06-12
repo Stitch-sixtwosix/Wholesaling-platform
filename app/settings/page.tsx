@@ -8,6 +8,8 @@ import {
   disconnectApollo,
   saveEmailSettings,
   disconnectEmail,
+  saveRentcastKey,
+  disconnectRentcast,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +24,7 @@ export default async function SettingsPage() {
   const org = await prisma.organization.findUnique({ where: { id: me.orgId } });
   const apolloConnected = Boolean(org?.apolloApiKey);
   const emailConnected = Boolean(org?.resendApiKey && org?.fromEmail);
+  const rentcastConnected = Boolean(org?.rentcastApiKey);
 
   return (
     <div>
@@ -83,6 +86,49 @@ export default async function SettingsPage() {
               <form action={disconnectApollo}>
                 <button type="submit" className="btn-ghost text-xs text-rose-600">
                   Disconnect Apollo
+                </button>
+              </form>
+            )}
+          </div>
+        </Section>
+
+        <Section title="RentCast (Listing Data)">
+          <div className="space-y-4 p-5">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-500">Status:</span>
+              {rentcastConnected ? (
+                <Badge
+                  options={[{ value: "on", label: "Connected", color: "bg-emerald-100 text-emerald-700" }]}
+                  value="on"
+                />
+              ) : (
+                <Badge
+                  options={[{ value: "off", label: "Not connected", color: "bg-slate-100 text-slate-500" }]}
+                  value="off"
+                />
+              )}
+              {rentcastConnected && org?.rentcastApiKey && (
+                <span className="font-mono text-xs text-slate-400">{maskKey(org.rentcastApiKey)}</span>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Powers the Deal Finder's automatic listing pull. Create a free account at{" "}
+              <span className="font-medium text-slate-600">rentcast.io</span> → Dashboard → API, and
+              paste the key. The free tier allows ~50 lookups/month — licensed data, no scraping.
+            </p>
+
+            <form action={saveRentcastKey} className="space-y-3">
+              <Field label={rentcastConnected ? "Replace API key" : "RentCast API key"}>
+                <Input name="rentcastApiKey" type="password" required placeholder="Paste your RentCast key" autoComplete="off" />
+              </Field>
+              <SubmitButton>{rentcastConnected ? "Update Key" : "Connect RentCast"}</SubmitButton>
+            </form>
+
+            {rentcastConnected && (
+              <form action={disconnectRentcast}>
+                <button type="submit" className="btn-ghost text-xs text-rose-600">
+                  Disconnect RentCast
                 </button>
               </form>
             )}
