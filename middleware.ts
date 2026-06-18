@@ -7,6 +7,9 @@ export async function middleware(req: NextRequest) {
   // Invitation acceptance is reachable without an existing session.
   if (pathname.startsWith("/invite")) return NextResponse.next();
 
+  // Public contract signing — sellers sign via an unguessable link, no login.
+  if (pathname.startsWith("/sign")) return NextResponse.next();
+
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySession(token, sessionSecret()) : null;
 

@@ -309,8 +309,16 @@ model Contract {
   body       String? // generated contract text
   sentDate   DateTime?
   signedDate DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+
+  // Built-in e-signature
+  signToken       String?   @unique // unguessable token for the public signing link
+  signerEmail     String? // who the signature request was sent to
+  signerName      String? // full name the signer typed as their signature
+  signerIp        String? // captured at signing (audit trail)
+  signerUserAgent String? // captured at signing (audit trail)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([orgId])
 }

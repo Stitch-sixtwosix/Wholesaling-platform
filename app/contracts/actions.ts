@@ -214,6 +214,89 @@ export async function sendContractToOwner(formData: FormData) {
   redirect(`/contracts/${contract.id}?sent=${encodeURIComponent(to)}`);
 }
 
+// Send the contract to the seller for e-signature: generates an unguessable
+// signing link and emails it from the org's connected address. The seller signs
+// in-app (no login) which auto-populates the signed contract back here.
+export async function sendForSignature(formData: FormData) {
+  const { orgId, name } = await requireUser();
+  const contractId = str(formData.get("contractId"));
+  const to = str(formData.get("to"));
+  if (!contractId) throw new Error("Contract id is required");
+  if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    throw new Error("A valid recipient email is required");
+  }
+
+  const contract = await prisma.contract.findFirst({
+    where: { id: contractId, orgId },
+    include: { deal: true },
+  });
+  if (!contract) throw new Error("Contract not found");
+  if (contract.status === "signed" || contract.status === "executed") {
+    redirect(`/contracts/${contract.id}?already=signed`);
+  }
+
+  const { randomBytes } = await import("node:crypto");
+  const token = contract.signToken ?? randomBytes(24).toString("hex");
+
+  const { headers } = await import("next/headers");
+  const h = headers();
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const host = h.get("host") ?? "";
+  const signUrl = `${proto}://${host}/sign/${token}`;
+
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { name: true, resendApiKey: true, fromEmail: true, gmailUser: true, gmailAppPassword: true },
+  });
+  const { resolveEmailConfig, sendEmail } = await import("@/lib/email");
+  const cfg = resolveEmailConfig(org);
+
+  let delivery: string;
+  if (cfg) {
+    await sendEmail(cfg, {
+      to,
+      subject: `Please review & sign: ${contract.title}`,
+      text:
+        `Hello,\n\n` +
+        `${name} from ${org?.name ?? "our team"} has sent you a contract for ` +
+        `${contract.propertyAddress ?? "your property"} to review and sign electronically.\n\n` +
+        `Open this secure link to review and sign:\n${signUrl}\n\n` +
+        `No account is needed. Your electronic signature is legally binding under the ESIGN Act.\n\n` +
+        `Questions? Just reply to this email.\n\n` +
+        `${name} · ${org?.name ?? ""}`,
+    });
+    delivery = `Signature request emailed to ${to}.`;
+  } else {
+    delivery = `Signature link created for ${to} (no email service connected — copy the link from this page to share). `;
+  }
+
+  await prisma.contract.update({
+    where: { id: contract.id },
+    data: {
+      status: "sent",
+      sentDate: contract.sentDate ?? new Date(),
+      signToken: token,
+      signerEmail: to,
+    },
+  });
+
+  if (contract.dealId) {
+    await prisma.activity.create({
+      data: { type: "email", body: delivery, dealId: contract.dealId },
+    });
+    if (contract.deal && ["lead", "contacted", "appointment"].includes(contract.deal.stage)) {
+      await prisma.deal.update({
+        where: { id: contract.dealId },
+        data: { stage: "offer", status: "active" },
+      });
+    }
+  }
+
+  revalidatePath(`/contracts/${contract.id}`);
+  if (contract.dealId) revalidatePath(`/pipeline/${contract.dealId}`);
+  redirect(`/contracts/${contract.id}?signsent=${encodeURIComponent(to)}`);
+}
+
 export async function updateContractStatus(contractId: string, status: string) {
   const { orgId } = await requireUser();
   const existing = await prisma.contract.findFirst({ where: { id: contractId, orgId } });

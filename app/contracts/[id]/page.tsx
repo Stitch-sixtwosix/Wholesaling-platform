@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, Badge, Section, LinkButton } from "@/components/ui";
 import { Field, Input, Textarea, Select, SubmitButton } from "@/components/Form";
 import { CONTRACT_TYPES, CONTRACT_STATUSES, labelOf } from "@/lib/constants";
 import { currency, date, dateTime } from "@/lib/format";
-import { updateContract, deleteContract, sendContractToOwner } from "../actions";
+import { updateContract, deleteContract, sendContractToOwner, sendForSignature } from "../actions";
 import { StatusControl } from "./StatusControl";
 import { PrintButton } from "./PrintButton";
 
@@ -25,7 +26,7 @@ export default async function ContractDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { sent?: string };
+  searchParams: { sent?: string; signsent?: string; already?: string };
 }) {
   const { orgId } = await requireUser();
   const contract = await prisma.contract.findFirst({
@@ -42,6 +43,13 @@ export default async function ContractDetailPage({
     (org?.gmailUser && org?.gmailAppPassword) || (org?.resendApiKey && org?.fromEmail)
   );
   const ownerEmail = contract.deal?.lead?.email ?? "";
+  const isSigned = contract.status === "signed" || contract.status === "executed";
+
+  // Build the absolute signing link for copy/share.
+  const h = headers();
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const host = h.get("host") ?? "";
+  const signUrl = contract.signToken ? `${proto}://${host}/sign/${contract.signToken}` : null;
 
   const del = deleteContract.bind(null, contract.id);
 
@@ -67,6 +75,18 @@ export default async function ContractDetailPage({
           {emailReady
             ? `Contract emailed to ${searchParams.sent} and marked as Sent.`
             : `Contract marked as Sent to ${searchParams.sent}. Connect an email service in Settings to actually deliver it.`}
+        </div>
+      )}
+      {searchParams.signsent && (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {emailReady
+            ? `Signature request emailed to ${searchParams.signsent}. You'll see it flip to Signed here the moment they sign.`
+            : `Signing link created for ${searchParams.signsent}. Connect Gmail in Settings to email it automatically — or copy the link below to share it now.`}
+        </div>
+      )}
+      {searchParams.already && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          This contract is already signed.
         </div>
       )}
 
@@ -113,41 +133,93 @@ export default async function ContractDetailPage({
 
         {/* Right: details + edit */}
         <div className="space-y-6">
-          <Section title="Send to Owner">
-            <form action={sendContractToOwner} className="space-y-3 p-5">
-              <input type="hidden" name="contractId" value={contract.id} />
-              <Field
-                label="Owner / Seller Email"
-                hint={
-                  ownerEmail
-                    ? "Pre-filled from the linked lead."
-                    : "No email on the linked lead — enter one."
-                }
-              >
-                <Input
-                  name="to"
-                  type="email"
-                  required
-                  defaultValue={ownerEmail}
-                  placeholder="owner@email.com"
-                />
-              </Field>
-              <SubmitButton className="w-full">
-                {emailReady ? "📤 Email Contract to Owner" : "Mark as Sent to Owner"}
-              </SubmitButton>
-              {!emailReady && (
-                <p className="text-xs text-amber-600">
-                  No email service connected — this will log the send and mark the contract Sent.
-                  Add a Resend key in <Link href="/settings" className="underline">Settings</Link> to
-                  deliver real email.
+          {isSigned ? (
+            <Section title="✓ Signed">
+              <div className="space-y-2 p-5 text-sm">
+                <p className="text-emerald-700">
+                  E-signed by <strong>{contract.signerName ?? "the seller"}</strong>
+                  {contract.signedDate ? ` on ${dateTime(contract.signedDate)}` : ""}.
                 </p>
-              )}
-              <p className="text-xs text-slate-400">
-                Sending marks the contract <strong>Sent</strong>, logs it on the deal timeline, and
-                moves the deal to the Offer stage if it isn't there yet.
-              </p>
-            </form>
-          </Section>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                  <p className="font-semibold text-slate-600">Signature audit trail</p>
+                  <p>Signer: {contract.signerName ?? "—"}</p>
+                  <p>Email: {contract.signerEmail ?? "—"}</p>
+                  <p>Signed: {contract.signedDate ? dateTime(contract.signedDate) : "—"}</p>
+                  <p>IP address: {contract.signerIp ?? "—"}</p>
+                </div>
+                <p className="text-xs text-slate-400">
+                  The deal has been moved to <strong>Under Contract</strong> and is in the
+                  dispositions portfolio.
+                </p>
+              </div>
+            </Section>
+          ) : (
+            <Section title="Send for Signature">
+              <div className="space-y-4 p-5">
+                <form action={sendForSignature} className="space-y-3">
+                  <input type="hidden" name="contractId" value={contract.id} />
+                  <Field
+                    label="Owner / Seller Email"
+                    hint={
+                      ownerEmail
+                        ? "Pre-filled from the linked lead."
+                        : "No email on the linked lead — enter one."
+                    }
+                  >
+                    <Input
+                      name="to"
+                      type="email"
+                      required
+                      defaultValue={contract.signerEmail ?? ownerEmail}
+                      placeholder="owner@email.com"
+                    />
+                  </Field>
+                  <SubmitButton className="w-full">
+                    {emailReady ? "✍️ Send for E-Signature" : "Create Signing Link"}
+                  </SubmitButton>
+                  <p className="text-xs text-slate-400">
+                    Emails the seller a secure link to review and sign. When they sign, this flips to{" "}
+                    <strong>Signed</strong> automatically and the deal moves to Under Contract.
+                  </p>
+                </form>
+
+                {signUrl && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-semibold text-slate-600">Signing link</p>
+                    <p className="mt-1 break-all font-mono text-xs text-brand-700">{signUrl}</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Share this directly (text/email) if you'd rather not send from the app.
+                    </p>
+                  </div>
+                )}
+
+                <details className="text-xs text-slate-500">
+                  <summary className="cursor-pointer">Or send a read-only copy (no signature)</summary>
+                  <form action={sendContractToOwner} className="mt-3 space-y-2">
+                    <input type="hidden" name="contractId" value={contract.id} />
+                    <Input
+                      name="to"
+                      type="email"
+                      required
+                      defaultValue={ownerEmail}
+                      placeholder="owner@email.com"
+                    />
+                    <SubmitButton className="w-full">
+                      {emailReady ? "Email a Copy" : "Mark as Sent"}
+                    </SubmitButton>
+                  </form>
+                </details>
+
+                {!emailReady && (
+                  <p className="text-xs text-amber-600">
+                    No email service connected — connect Gmail in{" "}
+                    <Link href="/settings" className="underline">Settings</Link> to email
+                    automatically, or copy the signing link above.
+                  </p>
+                )}
+              </div>
+            </Section>
+          )}
 
           <Section title="Details">
             <div className="grid grid-cols-2 gap-x-6 gap-y-4 p-5">
