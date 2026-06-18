@@ -28,7 +28,7 @@ function scoreBarColor(score: number): string {
 export default async function DispositionsPage({
   searchParams,
 }: {
-  searchParams: { deal?: string };
+  searchParams: { deal?: string; blasted?: string };
 }) {
   const { orgId } = await requireUser();
   const selectedId = searchParams.deal;
@@ -77,6 +77,14 @@ export default async function DispositionsPage({
         title="Dispositions"
         subtitle="Match deals to your cash buyers' buy boxes and blast them out."
       />
+
+      {searchParams.blasted !== undefined && (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Deal sheet emailed to {searchParams.blasted} buyer
+          {searchParams.blasted === "1" ? "" : "s"}. Check each buyer row's activity for delivery
+          status.
+        </div>
+      )}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Dispo-Ready Deals" value={String(deals.length)} />

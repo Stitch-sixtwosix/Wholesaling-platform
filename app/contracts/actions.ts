@@ -160,15 +160,21 @@ export async function sendContractToOwner(formData: FormData) {
 
   const org = await prisma.organization.findUnique({
     where: { id: orgId },
-    select: { name: true, resendApiKey: true, fromEmail: true },
+    select: {
+      name: true,
+      resendApiKey: true,
+      fromEmail: true,
+      gmailUser: true,
+      gmailAppPassword: true,
+    },
   });
 
+  const { resolveEmailConfig, sendEmail } = await import("@/lib/email");
+  const cfg = resolveEmailConfig(org);
+
   let delivery: string;
-  if (org?.resendApiKey && org.fromEmail) {
-    const { sendEmail } = await import("@/lib/email");
-    await sendEmail({
-      apiKey: org.resendApiKey,
-      from: org.fromEmail,
+  if (cfg) {
+    await sendEmail(cfg, {
       to,
       subject: `${contract.title} — for your review`,
       text:
@@ -177,11 +183,11 @@ export async function sendContractToOwner(formData: FormData) {
         `------------------------------------------------------------\n\n` +
         `${contract.body ?? "(contract body not generated)"}\n\n` +
         `------------------------------------------------------------\n` +
-        `Sent by ${name} · ${org.name}`,
+        `Sent by ${name} · ${org?.name ?? ""}`,
     });
     delivery = `Contract emailed to ${to}.`;
   } else {
-    delivery = `Contract marked sent to ${to} (no email service connected — add a Resend key in Settings to actually deliver it).`;
+    delivery = `Contract marked sent to ${to} (no email service connected — connect Gmail or Resend in Settings to actually deliver it).`;
   }
 
   await prisma.contract.update({

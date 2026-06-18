@@ -23,10 +23,12 @@ datasource db {
 model Organization {
   id           String   @id @default(cuid())
   name         String
-  apolloApiKey   String? // per-org Apollo.io API key for buyer discovery/enrichment
-  resendApiKey   String? // per-org Resend API key for sending contracts/emails
-  fromEmail      String? // verified sender address for outbound email
-  rentcastApiKey String? // per-org RentCast API key for pulling on-market listings
+  apolloApiKey     String? // per-org Apollo.io API key for buyer discovery/enrichment
+  resendApiKey     String? // per-org Resend API key for sending contracts/emails
+  fromEmail        String? // verified sender address for outbound email (Resend)
+  rentcastApiKey   String? // per-org RentCast API key for pulling on-market listings
+  gmailUser        String? // Google Workspace/Gmail address used to send (e.g. info@fastflip.com)
+  gmailAppPassword String? // 16-char Google App Password for SMTP send
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

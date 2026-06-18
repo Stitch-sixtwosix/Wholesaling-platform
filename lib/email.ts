@@ -1,37 +1,100 @@
-// Server-side email via the Resend REST API (https://resend.com).
+// Server-side email sending. Supports two providers, resolved per organization
+// in Settings → Integrations:
 //
-// Configured per organization in Settings → Integrations: a Resend API key and
-// a verified "from" address. Used to send contracts to property owners. All
-// calls are server-only.
+//   1. Gmail / Google Workspace via App Password (SMTP). Sends as your real
+//      address (e.g. info@fastflip.co); replies come back to that inbox — ideal
+//      for the disposition buyer blast. Workspace allows ~2,000 sends/day.
+//   2. Resend (HTTP API) — needs a verified domain.
+//
+// Gmail takes precedence when both are configured. All calls are server-only.
+
+import nodemailer from "nodemailer";
 
 export class EmailError extends Error {}
 
-export function emailConfigured(apiKey?: string | null, fromEmail?: string | null): boolean {
-  return Boolean(apiKey?.trim() && fromEmail?.trim());
+export type EmailConfig =
+  | { provider: "gmail"; user: string; appPassword: string }
+  | { provider: "resend"; apiKey: string; from: string };
+
+type OrgEmailFields = {
+  gmailUser?: string | null;
+  gmailAppPassword?: string | null;
+  resendApiKey?: string | null;
+  fromEmail?: string | null;
+};
+
+/** Pick the configured provider for an org (Gmail wins), or null if none. */
+export function resolveEmailConfig(org: OrgEmailFields | null | undefined): EmailConfig | null {
+  if (org?.gmailUser?.trim() && org?.gmailAppPassword?.trim()) {
+    return { provider: "gmail", user: org.gmailUser.trim(), appPassword: org.gmailAppPassword.trim() };
+  }
+  if (org?.resendApiKey?.trim() && org?.fromEmail?.trim()) {
+    return { provider: "resend", apiKey: org.resendApiKey.trim(), from: org.fromEmail.trim() };
+  }
+  return null;
 }
 
-export async function sendEmail(params: {
-  apiKey: string;
-  from: string;
+export function emailConfigured(org: OrgEmailFields | null | undefined): boolean {
+  return resolveEmailConfig(org) !== null;
+}
+
+/** The address mail will be sent from, for display. */
+export function fromAddress(cfg: EmailConfig): string {
+  return cfg.provider === "gmail" ? cfg.user : cfg.from;
+}
+
+export interface OutboundEmail {
   to: string;
   subject: string;
   text: string;
-}): Promise<{ id: string }> {
+}
+
+export async function sendEmail(cfg: EmailConfig, msg: OutboundEmail): Promise<{ id: string }> {
+  return cfg.provider === "gmail" ? sendViaGmail(cfg, msg) : sendViaResend(cfg, msg);
+}
+
+async function sendViaGmail(
+  cfg: Extract<EmailConfig, { provider: "gmail" }>,
+  msg: OutboundEmail
+): Promise<{ id: string }> {
+  const transport = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    auth: { user: cfg.user, pass: cfg.appPassword },
+  });
+  try {
+    const info = await transport.sendMail({
+      from: cfg.user,
+      to: msg.to,
+      subject: msg.subject,
+      text: msg.text,
+    });
+    return { id: info.messageId ?? "" };
+  } catch (e: any) {
+    const code = e?.responseCode ?? e?.code;
+    if (code === 535 || code === "EAUTH") {
+      throw new EmailError(
+        "Gmail rejected the login. Use a 16-character App Password (not your normal password), and make sure 2-Step Verification is on and App Passwords are allowed for the account."
+      );
+    }
+    throw new EmailError(`Gmail send failed: ${e?.message ?? "unknown error"}`);
+  }
+}
+
+async function sendViaResend(
+  cfg: Extract<EmailConfig, { provider: "resend" }>,
+  msg: OutboundEmail
+): Promise<{ id: string }> {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${params.apiKey.trim()}`,
+      Authorization: `Bearer ${cfg.apiKey}`,
     },
-    body: JSON.stringify({
-      from: params.from.trim(),
-      to: [params.to.trim()],
-      subject: params.subject,
-      text: params.text,
-    }),
+    body: JSON.stringify({ from: cfg.from, to: [msg.to], subject: msg.subject, text: msg.text }),
     cache: "no-store",
   });
-
   if (!res.ok) {
     let detail = "";
     try {
@@ -43,14 +106,8 @@ export async function sendEmail(params: {
     if (res.status === 401 || res.status === 403) {
       throw new EmailError("Resend rejected the API key. Check it in Settings → Integrations.");
     }
-    if (res.status === 422 && /domain/i.test(detail)) {
-      throw new EmailError(
-        "Resend rejected the sender address — verify your domain (or use onboarding@resend.dev for testing). " + detail
-      );
-    }
     throw new EmailError(`Email send failed (${res.status}). ${detail}`.trim());
   }
-
   const data = (await res.json()) as { id?: string };
   return { id: data.id ?? "" };
 }

@@ -36,9 +36,11 @@ export default async function ContractDetailPage({
 
   const org = await prisma.organization.findUnique({
     where: { id: orgId },
-    select: { resendApiKey: true, fromEmail: true },
+    select: { resendApiKey: true, fromEmail: true, gmailUser: true, gmailAppPassword: true },
   });
-  const emailReady = Boolean(org?.resendApiKey && org?.fromEmail);
+  const emailReady = Boolean(
+    (org?.gmailUser && org?.gmailAppPassword) || (org?.resendApiKey && org?.fromEmail)
+  );
   const ownerEmail = contract.deal?.lead?.email ?? "";
 
   const del = deleteContract.bind(null, contract.id);

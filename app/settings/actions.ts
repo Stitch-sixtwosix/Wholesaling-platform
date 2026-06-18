@@ -79,6 +79,35 @@ export async function disconnectRentcast() {
   revalidatePath("/deal-finder");
 }
 
+export async function saveGmailSettings(formData: FormData) {
+  const { orgId } = await requireAdmin();
+  const gmailUser = ((formData.get("gmailUser") as string) || "").trim();
+  const gmailAppPassword = ((formData.get("gmailAppPassword") as string) || "").replace(/\s+/g, "");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(gmailUser)) {
+    throw new Error("Enter the Gmail/Workspace address to send from.");
+  }
+  if (gmailAppPassword.length !== 16) {
+    throw new Error("A Google App Password is 16 characters (spaces are ignored). Generate one in your Google account → Security → App passwords.");
+  }
+  const res = await prisma.organization.updateMany({
+    where: { id: orgId },
+    data: { gmailUser, gmailAppPassword },
+  });
+  if (res.count === 0) throw new Error(NEEDS_DB);
+  revalidatePath("/settings");
+  revalidatePath("/dispositions");
+  revalidatePath("/contracts");
+}
+
+export async function disconnectGmail() {
+  const { orgId } = await requireAdmin();
+  await prisma.organization.updateMany({
+    where: { id: orgId },
+    data: { gmailUser: null, gmailAppPassword: null },
+  });
+  revalidatePath("/settings");
+}
+
 export async function disconnectApollo() {
   const { orgId } = await requireAdmin();
   await prisma.organization.updateMany({ where: { id: orgId }, data: { apolloApiKey: null } });

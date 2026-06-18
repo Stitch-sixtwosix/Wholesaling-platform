@@ -10,6 +10,8 @@ import {
   disconnectEmail,
   saveRentcastKey,
   disconnectRentcast,
+  saveGmailSettings,
+  disconnectGmail,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +26,7 @@ export default async function SettingsPage() {
   const org = await prisma.organization.findUnique({ where: { id: me.orgId } });
   const apolloConnected = Boolean(org?.apolloApiKey);
   const emailConnected = Boolean(org?.resendApiKey && org?.fromEmail);
+  const gmailConnected = Boolean(org?.gmailUser && org?.gmailAppPassword);
   const rentcastConnected = Boolean(org?.rentcastApiKey);
 
   return (
@@ -129,6 +132,60 @@ export default async function SettingsPage() {
               <form action={disconnectRentcast}>
                 <button type="submit" className="btn-ghost text-xs text-rose-600">
                   Disconnect RentCast
+                </button>
+              </form>
+            )}
+          </div>
+        </Section>
+
+        <Section title="Gmail / Google Workspace (Send Email)">
+          <div className="space-y-4 p-5">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-500">Status:</span>
+              {gmailConnected ? (
+                <Badge
+                  options={[{ value: "on", label: "Connected", color: "bg-emerald-100 text-emerald-700" }]}
+                  value="on"
+                />
+              ) : (
+                <Badge
+                  options={[{ value: "off", label: "Not connected", color: "bg-slate-100 text-slate-500" }]}
+                  value="off"
+                />
+              )}
+              {gmailConnected && org?.gmailUser && (
+                <span className="text-xs text-slate-400">sending as {org.gmailUser}</span>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Sends contracts and buyer blasts from your real address — replies land in your inbox.
+              Turn on <strong>2-Step Verification</strong>, then create an <strong>App Password</strong>{" "}
+              (Google Account → Security → App passwords) and paste it below. Used for both contract
+              sends and the disposition buyer blast. Takes priority over Resend when connected.
+            </p>
+
+            <form action={saveGmailSettings} className="space-y-3">
+              <Field label="Send-from address">
+                <Input
+                  name="gmailUser"
+                  type="email"
+                  required
+                  defaultValue={org?.gmailUser ?? ""}
+                  placeholder="info@fastflip.co"
+                  autoComplete="off"
+                />
+              </Field>
+              <Field label="App Password" hint="16 characters; spaces are ignored.">
+                <Input name="gmailAppPassword" type="password" required placeholder="xxxx xxxx xxxx xxxx" autoComplete="off" />
+              </Field>
+              <SubmitButton>{gmailConnected ? "Update Gmail" : "Connect Gmail"}</SubmitButton>
+            </form>
+
+            {gmailConnected && (
+              <form action={disconnectGmail}>
+                <button type="submit" className="btn-ghost text-xs text-rose-600">
+                  Disconnect Gmail
                 </button>
               </form>
             )}
